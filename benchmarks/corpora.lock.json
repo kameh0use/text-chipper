@@ -1,0 +1,32 @@
+{
+  "chatlogs.md": {
+    "bytes": 40013,
+    "sha256": "543a98f82b2a6a492349fd7f8c9d6c3e78d1a4af81d13c79a7fd513c3f65bda6",
+    "url": "https://raw.githubusercontent.com/brandonstarxel/chunking_evaluation/main/chunking_evaluation/evaluation_framework/general_evaluation_data/corpora/chatlogs.md"
+  },
+  "finance.md": {
+    "bytes": 737905,
+    "sha256": "1c48d0156820abc88e46e5c992fa0cd2708b07ae59a3771b2b18234b7208561f",
+    "url": "https://raw.githubusercontent.com/brandonstarxel/chunking_evaluation/main/chunking_evaluation/evaluation_framework/general_evaluation_data/corpora/finance.md"
+  },
+  "pubmed.md": {
+    "bytes": 501965,
+    "sha256": "0fd9242ffb253695e5d0f0215cb79a66a2a8f1236591e764c60d370747684ced",
+    "url": "https://raw.githubusercontent.com/brandonstarxel/chunking_evaluation/main/chunking_evaluation/evaluation_framework/general_evaluation_data/corpora/pubmed.md"
+  },
+  "questions_df.csv": {
+    "bytes": 236464,
+    "sha256": "3ab3901889b8900f43775537bf12d36bd6614255fc59124faca31bede1dda7a3",
+    "url": "https://raw.githubusercontent.com/brandonstarxel/chunking_evaluation/main/chunking_evaluation/evaluation_framework/general_evaluation_data/questions_df.csv"
+  },
+  "state_of_the_union.md": {
+    "bytes": 48995,
+    "sha256": "6fc21d560d31eb2421e337596feea0f83f1fa9ca02c6c4e47bc26959d7531b37",
+    "url": "https://raw.githubusercontent.com/brandonstarxel/chunking_evaluation/main/chunking_evaluation/evaluation_framework/general_evaluation_data/corpora/state_of_the_union.md"
+  },
+  "wikitexts.md": {
+    "bytes": 118612,
+    "sha256": "74cafcdb771185ecb9f22cc41b73e2e44477e0636ecf9cf1f96fd6ee0f4b86c0",
+    "url": "https://raw.githubusercontent.com/brandonstarxel/chunking_evaluation/main/chunking_evaluation/evaluation_framework/general_evaluation_data/corpora/wikitexts.md"
+  }
+}

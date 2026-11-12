@@ -1,0 +1,64 @@
+[package]
+name = "text_chipper"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.88.0"
+description = "Token-budgeted, Markdown-aware text chunking for RAG and LLM pipelines, with pluggable tokenizers and Python bindings."
+readme = "README.md"
+keywords = ["chunking", "tokenizer", "markdown", "rag", "nlp"]
+categories = ["text-processing"]
+license = "Apache-2.0"
+repository = "https://github.com/kameh0use/text-chipper"
+
+[lib]
+name = "text_chipper"
+# `cdylib` is the Python extension module; `rlib` lets Rust code (tests, benches, other crates) link the library.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tiktoken = { version = "=4.1.2", default-features = false, features = ["vocab-openai"] }
+unicode-normalization = "0.1"
+unicode-segmentation = "1.11"
+rayon = "1.10"
+mimalloc = { version = "0.1.43", optional = true }
+
+[dependencies.pyo3]
+version = "0.30.1"
+features = ["abi3-py39"]
+
+[features]
+default = ["python", "mimalloc"]
+# Currently unused marker feature; kept so existing `--features python` invocations keep working.
+python = []
+# Use mimalloc as the global allocator. Disable (`default-features = false`) if your Rust
+# application sets its own allocator.
+mimalloc = ["dep:mimalloc"]
+# Hugging Face `tokenizer.json` support (`tokenizer_file=` in Python).
+hf = ["dep:tokenizers"]
+# Compiles the long-running diagnostic/validation tests (reports, stress, release suite).
+# Off by default so a plain `cargo test` shows only the regular tests, with no "ignored" lines.
+diagnostics = []
+# Counts tokenizer invocations/bytes (see backend::stats and Python `_stats()`); off by default.
+stats = []
+
+[dependencies.tokenizers]
+version = "0.19"
+optional = true
+
+[dev-dependencies]
+# Reference tokenizer for the backend parity tests (pinned for reproducible parity tests).
+tiktoken-rs = "=0.6.0"
+# CommonMark reference parser for src/tests/oracle_list.rs (test-only).
+pulldown-cmark = { version = "0.13", default-features = false }
+serde_json = "1"
+proptest = "1.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "chipper_benchmark"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

@@ -1,0 +1,92 @@
+name: benchmark
+
+# Runs the cross-library benchmark (benchmarks/) on a GitHub-hosted runner and publishes the tables
+# in the job summary; raw results, charts and `pip freeze` are uploaded as an artifact.
+# Hosted runners are shared machines: use these numbers for relative comparison, not absolute speed.
+on:
+  workflow_dispatch:
+    inputs:
+      size_mib:
+        description: "Size of each synthetic corpus in MiB"
+        default: "1.0"
+      rounds:
+        description: "Independent processes per cell"
+        default: "5"
+      include_real:
+        description: "Also run on the downloaded real-world corpora"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SIZE_MIB: ${{ inputs.size_mib }}
+      ROUNDS: ${{ inputs.rounds }}
+      INCLUDE_REAL: ${{ inputs.include_real }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Create virtualenv
+        run: |
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install benchmark dependencies and build text_chipper
+        run: |
+          python -m pip install --upgrade pip maturin
+          python -m pip install -r benchmarks/requirements.txt
+          maturin develop --release
+
+      - name: Harness self-tests
+        run: python -m pytest benchmarks/tests -q
+
+      - name: Smoke-test every adapter
+        working-directory: benchmarks
+        run: python -m chunkbench check
+
+      - name: Fetch real-world corpora (pinned by SHA-256)
+        if: ${{ inputs.include_real }}
+        working-directory: benchmarks
+        run: python -m chunkbench fetch
+
+      - name: Run benchmark
+        working-directory: benchmarks
+        run: |
+          args=(run --size-mib "$SIZE_MIB" --rounds "$ROUNDS" --out ci_results)
+          if [ "$INCLUDE_REAL" != "true" ]; then args+=(--no-real); fi
+          python -m chunkbench "${args[@]}"
+
+      - name: Charts, environment record, job summary
+        working-directory: benchmarks
+        run: |
+          run_dir="$(ls -d ci_results/*/ | sort | tail -n1)"
+          python -m chunkbench plot "$run_dir"
+          python -m pip freeze > "${run_dir}pip_freeze.txt"
+          echo "$GITHUB_SHA" > "${run_dir}commit.txt"
+          {
+            echo "### Benchmark run ($GITHUB_SHA)"
+            echo "Hosted runner (shared hardware): compare libraries with each other, not with other machines."
+            echo
+            cat "${run_dir}report.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmarks/ci_results/
+          if-no-files-found: error

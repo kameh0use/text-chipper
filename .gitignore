@@ -1,0 +1,30 @@
+# Rust
+/target/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local leftovers
+*.orig
+*.rej
+*.patch
+/reports/
+
+# Benchmark: downloaded corpora (re-created by `python -m chunkbench fetch`, pinned in corpora.lock.json)
+/benchmarks/corpora/
+# Benchmark: CI output (uploaded as a workflow artifact instead)
+/benchmarks/ci_results/

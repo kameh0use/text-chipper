@@ -1,0 +1,12 @@
+# Contestants and measurement dependencies. Version ranges are deliberately loose here; every run
+# records the exact installed versions in results.json. Publish `pip freeze` next to your results.
+tiktoken>=0.8
+chonkie>=1.0
+semantic-text-splitter>=0.20
+langchain-text-splitters>=0.3
+numpy>=1.26
+psutil>=5.9
+matplotlib>=3.8
+pytest>=8
+semchunk>=4.1.0
+# text_chipper itself: from the repository root run `maturin develop --release`.

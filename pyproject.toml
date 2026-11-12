@@ -1,0 +1,33 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "text-chipper"
+dynamic = ["version"]
+description = "Token-budgeted, Markdown-aware text chunking for RAG and LLM pipelines, with pluggable tokenizers (Rust core, Python API)."
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = ["chunking", "text-splitter", "tokenizer", "markdown", "rag", "llm"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Topic :: Text Processing",
+]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/kameh0use/text_chipper"
+Repository = "https://github.com/kameh0use/text_chipper"
+Issues = "https://github.com/kameh0use/text_chipper/issues"
+
+[project.optional-dependencies]
+test = ["pytest"]
+bench = ["tiktoken", "chonkie", "semantic-text-splitter", "langchain-text-splitters", "numpy", "psutil", "matplotlib"]
+
+[tool.maturin]
+module-name = "text_chipper"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

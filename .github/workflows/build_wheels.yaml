@@ -1,0 +1,130 @@
+name: build_wheels
+
+# Builds the sdist and the wheels for PyPI (`pip install text-chipper`).
+#   - pull requests / manual runs: build and test only
+#   - tag `vX.Y.Z` (must equal the version in Cargo.toml): build, test, then publish to PyPI
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-wheels-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-tests:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --release
+
+  sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag must match the crate version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          test "v${version}" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != Cargo.toml version ${version}"; exit 1; }
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-sdist
+          path: dist/*.tar.gz
+
+  wheels:
+    name: wheel ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64,    os: ubuntu-latest,    target: x86_64-unknown-linux-gnu,    manylinux: auto }
+          - { name: linux-aarch64,   os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu,   manylinux: auto }
+          - { name: musllinux-x86_64,  os: ubuntu-latest,    target: x86_64-unknown-linux-musl,  manylinux: musllinux_1_2 }
+          - { name: musllinux-aarch64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, manylinux: musllinux_1_2 }
+          - { name: macos-arm64,     os: macos-latest,     target: aarch64-apple-darwin,         manylinux: "off" }
+          - { name: macos-x86_64,    os: macos-15-intel,   target: x86_64-apple-darwin,          manylinux: "off" }
+          - { name: windows-x64,     os: windows-latest,   target: x86_64-pc-windows-msvc,       manylinux: "off" }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      # The extension uses the stable ABI (abi3-py39): one wheel per platform covers Python >= 3.9.
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --out dist
+          sccache: "true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.name }}
+          path: dist/*.whl
+
+  test-wheels:
+    name: test wheel on ${{ matrix.os }} / py${{ matrix.python }}
+    needs: wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  python: "3.9",  wheel: linux-x86_64 }
+          - { os: ubuntu-latest,  python: "3.13", wheel: linux-x86_64 }
+          - { os: macos-latest,   python: "3.12", wheel: macos-arm64 }
+          - { os: windows-latest, python: "3.12", wheel: windows-x64 }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ matrix.wheel }}
+          path: dist
+      - name: Install the built wheel (not the source tree) and run the binding tests
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip pytest
+          python -m pip install --no-index --find-links dist text-chipper
+          python -c "import text_chipper; print(text_chipper.__file__)"
+          # Run from a temp copy of the tests so `import text_chipper` cannot pick up anything from the repo root.
+          mkdir -p "$RUNNER_TEMP/t" && cp -r tests "$RUNNER_TEMP/t/"
+          cd "$RUNNER_TEMP/t" && python -m pytest tests -q
+
+  publish:
+    name: publish to PyPI
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [rust-tests, sdist, wheels, test-wheels]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/text-chipper
+    permissions:
+      id-token: write   # PyPI trusted publishing (no API token stored in GitHub)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
