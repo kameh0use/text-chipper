@@ -74,15 +74,26 @@ def test_corpora_are_deterministic():
     assert all(w.gold for n, w in a.items() if n.startswith(("prose", "markdown")))
 
 
-@pytest.fixture
-def run_dir(tmp_path):
+def _run(tmp_path, *extra):
     argv = ["run", "--libs", "stub_window", "stub_chars", "stub_lossy", "--encoding", "regex-test",
             "--chunk-size", "64", "--workloads", "prose_en", "markdown_doc", "--size-mib", "0.05",
             "--rounds", "2", "--repeats", "2", "--min-time", "0", "--max-gold", "30", "--no-real",
-            "--out", str(tmp_path)]
+            "--out", str(tmp_path), *extra]
     assert runner.main(argv) == 0
     (d,) = list(tmp_path.iterdir())
     return d
+
+
+@pytest.fixture
+def run_dir(tmp_path):
+    """A run with the default timing mode (cold)."""
+    return _run(tmp_path)
+
+
+@pytest.fixture
+def steady_run_dir(tmp_path):
+    """A run in steady mode, which also records fresh-input timings."""
+    return _run(tmp_path, "--mode", "steady")
 
 
 def test_end_to_end(run_dir):
@@ -92,7 +103,9 @@ def test_end_to_end(run_dir):
     assert len(cells) == 3 * 2 * 2
     good = cells[("stub_window", "prose_en", "single")]
     assert good["status"] == "ok" and good["rounds_ok"] == 2 and good["mib_per_s"] > 0
-    assert good["mib_per_s_fresh"] > 0 and good["fresh_wall_ms"]["n"] >= 2 and good["repeat_vs_fresh_speedup"] > 0
+    # cold mode (the default): one first-and-only call per process, so there are no fresh-input samples
+    assert good["timing_mode"] == "cold" and good["wall_ms"]["n"] == 2
+    assert "mib_per_s_fresh" not in good and "fresh_wall_ms" not in good
     assert good["quality"]["over_limit_chunks"] == 0 and good["quality"]["coverage_pct"] > 99.9
     assert cells[("stub_chars", "prose_en", "all")]["quality"]["over_limit_pct"] > 0
     assert cells[("stub_chars", "prose_en", "all")]["quality"]["mid_word_cut_pct"] > 50
@@ -101,8 +114,18 @@ def test_end_to_end(run_dir):
     for name in ("results.json", "summary.csv", "report.md"):
         assert (run_dir / name).exists()
     assert "stub window" in (run_dir / "report.md").read_text()
-    assert "fresh MiB/s" in (run_dir / "report.md").read_text()
+    report = (run_dir / "report.md").read_text()
+    assert "first and only" in report and "fresh MiB/s" not in report
     assert not (run_dir / "_cache").exists()
+
+
+def test_steady_mode_records_fresh_input_timings(steady_run_dir):
+    data = json.loads((steady_run_dir / "results.json").read_text())
+    cells = {(c["adapter"], c["workload"], c["lane"]): c for c in data["cells"]}
+    good = cells[("stub_window", "prose_en", "single")]
+    assert good["status"] == "ok" and good["timing_mode"] == "steady" and good["mib_per_s"] > 0
+    assert good["mib_per_s_fresh"] > 0 and good["fresh_wall_ms"]["n"] >= 2 and good["repeat_vs_fresh_speedup"] > 0
+    assert "fresh MiB/s" in (steady_run_dir / "report.md").read_text()
 
 
 def test_failing_adapter_is_reported_not_fatal(tmp_path, monkeypatch):
