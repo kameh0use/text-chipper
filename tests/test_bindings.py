@@ -90,10 +90,18 @@ def test_offsets_roundtrip_and_budget():
 
 
 def test_headers_are_attached_as_context():
-    doc = "# Guide\n\n## Setup\n\nInstall the package and run it.\n"
+    # Two sections that are too big to share one chunk, so the second chunk is its own section and
+    # carries the full heading path. (A tiny document would be merged into one chunk whose headers
+    # are only the common ancestor, with the lower heading kept in the body.)
+    doc = (
+        "# Guide\n\n" + "Intro sentence. " * 8
+        + "\n\n## Setup\n\n" + "Install the package and run it. " * 4 + "\n"
+    )
     chunks = TextChipper(max_length=200, overlap=10, encoding="chars").chunk(doc)
-    assert chunks
-    assert any("Setup" in " ".join(c.headers) for c in chunks)
+    assert len(chunks) >= 2
+    assert chunks[0].headers == ["Guide"]
+    assert any(c.headers == ["Guide", "Setup"] for c in chunks)
+    assert chunks[-1].contextualized_text.startswith("[ctx:Guide > Setup] ")
 
     no_ctx = TextChipper(
         max_length=200, overlap=10, encoding="chars", include_context=False
