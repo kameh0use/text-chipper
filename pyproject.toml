@@ -18,9 +18,9 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 
 [project.urls]
-Homepage = "https://github.com/kameh0use/text_chipper"
-Repository = "https://github.com/kameh0use/text_chipper"
-Issues = "https://github.com/kameh0use/text_chipper/issues"
+Homepage = "https://github.com/kameh0use/text-chipper"
+Repository = "https://github.com/kameh0use/text-chipper"
+Issues = "https://github.com/kameh0use/text-chipper/issues"
 
 [project.optional-dependencies]
 test = ["pytest"]
