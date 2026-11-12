@@ -5,6 +5,7 @@ name: build_wheels
 #   - tag `vX.Y.Z` (must equal the version in Cargo.toml): build, test, then publish to PyPI
 on:
   push:
+    branches: [main]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
