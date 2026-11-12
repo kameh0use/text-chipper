@@ -8,6 +8,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
-      ignore:
+    ignore:
       - dependency-name: "tiktoken-rs"
       - dependency-name: "tiktoken"
