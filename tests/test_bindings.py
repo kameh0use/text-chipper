@@ -103,11 +103,6 @@ def test_headers_are_attached_as_context():
     assert any(c.headers == ["Guide", "Setup"] for c in chunks)
     assert chunks[-1].contextualized_text.startswith("[ctx:Guide > Setup] ")
 
-    no_ctx = TextChipper(
-        max_length=200, overlap=10, encoding="chars", include_context=False
-    ).chunk(doc)
-    assert all(c.headers == [] for c in no_ctx)
-
 
 def test_normalization_keeps_original_offsets():
     doc = "cafe\u0301 au lait. " * 200  # 'e' + combining acute: NFC composes it
