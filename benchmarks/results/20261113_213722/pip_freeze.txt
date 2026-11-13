@@ -44,7 +44,7 @@ semantic-text-splitter==0.33.2
 semchunk==4.1.1
 sniffio==1.3.1
 tenacity==9.2.1
--e git+https://github.com/kameh0use/text-chipper@14e398b4c6d1f9957b5db23e7304d1552d26a877#egg=text_chipper
+-e git+https://github.com/kameh0use/text-chipper@a17cf9d5d7e0c6abdbf18f3f8d464123840592e5#egg=text_chipper
 tiktoken==0.14.0
 tokie==0.3.0
 tqdm==4.70.1
