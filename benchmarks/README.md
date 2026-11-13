@@ -1,272 +1,360 @@
-# Benchmarks
+# text_chipper
 
-`chunkbench` is a reproducible cross-library benchmark for token-bounded text chunkers. It compares
-text_chipper with seven other ways of splitting text into chunks of at most 512 `cl100k_base` tokens, on
-12 workloads, and measures speed, memory, budget compliance, fidelity to the source and chunk boundary
-quality.
+[![Rust Version](https://img.shields.io/badge/rust-1.88.0-orange.svg)](https://www.rust-lang.org/)
+[![Python](https://img.shields.io/badge/python-%E2%89%A53.9-blue.svg)](https://www.python.org/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/kameh0use/text-chipper)
 
-Every number is measured from outside the libraries: chunks are located in the source text by exact
-substring search and tokens are counted with one independent reference tokenizer (tiktoken `cl100k_base`).
-No library's own offsets or token counts are trusted.
+High-performance, Markdown-aware, strictly budget-enforced text chunking for RAG and LLM pipelines.
+Built in Rust with Python bindings. 
 
-- [Latest results](#latest-results)
-- [Run it yourself](#run-it-yourself)
-- [Method](#method)
-- [Contestants](#contestants)
-- [Workloads](#workloads)
-- [Metrics](#metrics) (definitions of every column in `report.md` and `summary.csv`)
-- [Reading the coverage numbers](#reading-the-coverage-numbers)
-- [Caveats](#caveats)
-- [Adding a library, tests, reproducibility](#adding-a-library-tests-reproducibility)
+- **Token-exact budget.** In the default strict mode every chunk is re-tokenized exactly as it
+  will be delivered (header context included), so `token_count <= max_length` always holds.
+- **Structure-aware.** Text is divided at blank lines into blocks that are packed into chunks and
+  split internally only when a block does not fit. Fenced code blocks and list items are kept
+  intact when they fit, and headings become `headers` metadata for each chunk. See
+  [Markdown support](#markdown-support-and-commonmark-conformance) for exactly what is and is
+  not recognized.
+- **Never cuts inside a grapheme cluster** (emoji sequences, combining marks).
+- **Offsets map back to your input**, even when Unicode normalization (NFC/NFKC) is applied.
 
-## Latest results
+- Block boundaries are compared against `pulldown-cmark` on the CommonMark 0.31.2 spec corpus
+  (results and limits below); there are also property tests and a robustness suite. This is a
+  chunker, not a complete CommonMark parser.
 
-Run `20261112_233503`, in [`results/20261112_233503/`](results/20261112_233503/) (full tables:
-[`report.md`](results/20261112_233503/report.md), flat data: `summary.csv`, raw data: `results.json`).
+---
 
-| | |
-| --- | --- |
-| Machine | GitHub Actions runner, AMD EPYC 9V74, 2 logical CPUs, 7.7 GB RAM, Linux |
-| Software | Python 3.12.16, chunkbench 1.0.0, project commit `14e398b` |
-| Libraries | text-chipper 0.2.0, chonkie 1.7.0, langchain-text-splitters 1.1.3, semchunk 4.1.1, semantic-text-splitter 0.33.2, tiktoken 0.14.0 |
-| Settings | 512-token chunks, `cl100k_base`, overlap 0, cold timing, 5 rounds, 1 MiB per synthetic workload |
-| Size of the run | 8 contestants × 12 workloads × 2 lanes = 192 cells, 5 fresh processes each |
-
-The charts show the `single` lane (one CPU, one thread). On this 2-CPU runner the `all` lane gives the same
-picture: CPU time divided by wall time is between 1.00 and 1.10 for every library, so none of them gains
-from the second CPU.
-
-**Speed**: geometric mean of throughput over the 12 workloads.
-
-![Bar chart: geometric-mean throughput of each library over all 12 workloads](charts/speed_overall.png)
-
-| Library | MiB/s (geometric mean) | text_chipper is faster by |
-| --- | ---: | ---: |
-| text_chipper | 25.4 | |
-| text_chipper (flat) | 17.9 | 1.4× |
-| tiktoken window | 12.4 | 2.0× |
-| chonkie TokenChunker | 7.7 | 3.3× |
-| chonkie RecursiveChunker | 7.1 | 3.6× |
-| semchunk | 4.5 | 5.6× |
-| LangChain | 2.7 | 9.5× |
-| semantic-text-splitter | 2.3 | 11.1× |
-
-![Heat map: MiB/s of each library on each workload](charts/speed_per_workload.png)
-
-text_chipper is fastest on 11 of 12 workloads. On `stress_cjk_unbroken` tiktoken window (15.8 MiB/s) and
-chonkie TokenChunker (11.2 MiB/s) are faster than text_chipper (7.0 MiB/s). On `real_chatlogs` the top two
-are within noise (14.2 and 13.4 MiB/s, about 3 ms per call).
-
-**Memory**: peak memory of the whole Python process, mean over the workloads.
-
-![Bar chart: peak memory of the Python process per library, single core](charts/memory_single_core.png)
-
-**Quality**: worst case over the 12 workloads for each of four guarantees, next to speed. Chunk-end cleanliness (`clean end %`) is a style measure, not a guarantee, so it is discussed in the main README and in `report.md` instead of the scorecard.
-
-![Scorecard: token limit, words, source text and code fences per library, with speed](charts/quality_scorecard.png)
-
-The charts above are the summary. `python -m chunkbench plot results/20261112_233503` draws one detailed
-chart per metric (workloads on the y axis, one bar per library, both lanes) into the run's `plots/` folder.
-
-## Run it yourself
-
-From the `benchmarks/` directory:
+## ⚡ Quick Start
 
 ```bash
-pip install -r requirements.txt           # contestants, psutil, matplotlib, pytest
-maturin develop --release                 # text_chipper itself, run from the repository root
-
-python -m chunkbench check                # smoke-test every adapter first
-python -m chunkbench fetch                # download the real corpora, verified by SHA-256
-python -m chunkbench run --rounds 5 --size-mib 1 --out results
-python -m chunkbench report results/<run> # regenerate report.md and summary.csv
-python -m chunkbench plot results/<run>   # detailed per-metric charts (PNG and SVG)
-
-python make_charts.py results/<run> charts --svg   # the four README charts
+pip install text-chipper
 ```
 
-Useful options of `run`: `--libs` and `--workloads` select a subset, `--lanes single all`, `--overlaps 0 50`
-(libraries without an overlap option are skipped for overlap > 0), `--chunk-size`, `--mode steady`
-(see [Method](#method)), `--no-real` (skip the downloaded corpora), `--timeout`. `python -m chunkbench run -h`
-lists all of them. The defaults are 7 rounds in cold mode and 1 MiB per synthetic corpus; the published run
-used 5 rounds.
+> Not on PyPI yet? Build from source, see [Installation from source](#installation-from-source).
 
-`make_charts.py` needs only matplotlib and reads everything, including the environment line at the bottom of
-each chart, from `results.json`.
+```python
+from text_chipper import TextChipper
 
-## Method
+chipper = TextChipper(max_length=512, overlap=50, encoding="cl100k_base")
 
-- **Same task for everyone.** Split the input into chunks of at most 512 `cl100k_base` tokens. Libraries run
-  with their defaults; nothing is tuned. Where a library has a Markdown-aware splitter it is used on the
-  Markdown workloads (semantic-text-splitter `MarkdownSplitter`, LangChain `MarkdownTextSplitter`).
-- **One judge.** Every chunk is re-tokenized with tiktoken `cl100k_base` on the text a library would
-  actually deliver to a model (for text_chipper that is `contextualized_text`, header label included).
-- **Cold timing.** Each timing sample is the first and only chunking call in a fresh Python process, on the
-  unmodified text. A fresh process cannot reuse a result cache or a token-count cache, so the numbers are
-  safe to quote. Import and tokenizer loading are excluded from the timing (reported as `init_ms`). The
-  published number is the median over the rounds, in shuffled order so that no library always runs first or
-  last. `--mode steady` instead times repeated calls and calls on salted fresh inputs; it exists to expose
-  caching (a repeat speed far above the fresh speed means a cache is answering).
-- **Lanes.** `single` pins the process to one CPU (where the OS supports it) and sets the thread-count
-  variables (`RAYON_NUM_THREADS`, `OMP_NUM_THREADS` and others) to 1. `all` places no restriction.
-- **Memory.** Peak resident memory of the process (`ru_maxrss`), read right after library import and
-  tokenizer load and again after the chunking call. It includes the interpreter and everything imported.
-- **No hidden work in the timed region.** Only the library's own `chunk` or `split` call is timed; turning
-  its native result into strings happens afterwards.
+for chunk in chipper.chunk(open("README.md", encoding="utf-8").read()):
+    print(chunk.token_count, chunk.headers)   # e.g. 487 ['Install', 'From source']
+    print(chunk.contextualized_text)          # "[ctx:Install > From source] ..." + text
+```
 
-## Contestants
+Other entry points: `chunk_batch(texts)`, `from_file(path)`, `from_files(paths)`,
+`from_file_stream(path)` (an iterator), `count_tokens(text)`.
 
-| Label | What runs | Markdown-aware | Overlap |
-| --- | --- | --- | --- |
-| text_chipper | `TextChipper(max_length=512, encoding="cl100k_base")`, default mode (`include_context=True`, strict) | yes | yes |
-| text_chipper (flat) | the same with `include_context=False`: plain token windows, no Markdown parsing | no | yes |
-| chonkie TokenChunker | `chonkie.TokenChunker`, fixed token windows | no | yes |
-| chonkie RecursiveChunker | `chonkie.RecursiveChunker` with its default rules | no | no |
-| semantic-text-splitter | `MarkdownSplitter` or `TextSplitter` `.from_tiktoken_model("gpt-4")` (this is `cl100k_base`) | yes | yes |
-| semchunk | `semchunk.chunkerify(cl100k_base, 512)`; plain text only, with its default token-count memoization | no | yes |
-| LangChain | `MarkdownTextSplitter` or `RecursiveCharacterTextSplitter` `.from_tiktoken_encoder` | yes | yes |
-| tiktoken window | naive baseline: encode once, slice windows of 512 tokens, decode each window | no | yes |
+Each `TextChunk` has `text`, `headers`, `contextualized_text`, `token_count`, character/byte
+offsets in the normalized text (`start_index`, `end_index`, `start_byte`, `end_byte`) and in
+your original input (`orig_start_index`, `orig_end_index`, `orig_start_byte`, `orig_end_byte`).
 
-The adapters in [`chunkbench/adapters.py`](chunkbench/adapters.py) are the only place where a library is
-configured. Review them first if you want to look for bias.
+Adapters for LangChain and LlamaIndex are in [`integrations/`](integrations/).
 
-## Workloads
+---
 
-All synthetic corpora are generated from a seeded PRNG, so everyone is benchmarked on identical bytes. The
-real corpora are downloaded once with `python -m chunkbench fetch` and pinned by SHA-256 in
-[`corpora.lock.json`](corpora.lock.json).
 
-| Workload | Kind | Format | Size | Content |
-| --- | --- | --- | ---: | --- |
-| `prose_en` | synthetic | plain | 1 MiB | English-like paragraphs |
-| `markdown_doc` | synthetic | Markdown | 1 MiB | headings, paragraphs, bullet and numbered lists, fenced code, tables, block quotes, links |
-| `code_heavy` | synthetic | Markdown | 1 MiB | about three quarters fenced code blocks (Python, JavaScript, shell) and short paragraphs |
-| `multilingual` | synthetic | plain | 1 MiB | sentences in several scripts |
-| `real_pubmed` | real | Markdown | 490 KiB | PubMed texts |
-| `real_finance` | real | Markdown | 721 KiB | finance texts |
-| `real_wikitexts` | real | Markdown | 116 KiB | Wikipedia texts |
-| `real_chatlogs` | real | Markdown | 39 KiB | chat logs |
-| `real_state_of_the_union` | real | Markdown | 48 KiB | a State of the Union address |
-| `stress_single_line` | stress | plain | 1 MiB | the prose of `prose_en` as one line, no line breaks |
-| `stress_giant_list` | stress | Markdown | 1 MiB | one huge numbered list |
-| `stress_cjk_unbroken` | stress | plain | 1 MiB | Chinese and Japanese text with no separators |
 
-The real corpora come from the `chunking_evaluation` data set
-([github.com/brandonstarxel/chunking_evaluation](https://github.com/brandonstarxel/chunking_evaluation)),
-which also supplies the questions whose reference excerpts are used by the answer-alignment metric. For the
-synthetic workloads, excerpts of one to three consecutive sentences are sampled with a fixed seed
-(`gold_source` says which kind was used).
+## 🛠️ Scope & Installation
 
-## Metrics
+### Scope
 
-Column names below are the ones in `report.md`; the matching `summary.csv` names are in parentheses where
-they differ. No metric is a single score and higher is not always better: read them together.
-
-### Speed and memory
-
-| Column | Meaning |
+| Supported | Not supported |
 | --- | --- |
-| MiB/s (`mib_per_s`) | Input size in MiB divided by the median wall time of the chunking call. |
-| median ms (`wall_ms_median`) | That median wall time. |
-| spread % (`spread_pct`) | (max − min) / median over the rounds. A noise check: large values on calls of a few milliseconds are normal. |
-| CPU ms (`cpu_ms_median`) | Median CPU time (user + system, all threads) of the call. |
-| CPU/wall (`cpu_utilization`) | CPU time divided by wall time. About 1.0 means single-threaded; above 1.0 means several threads were busy. |
-| RSS Δ MB (`rss_delta_mb`) | Peak resident memory after the call minus the memory right after import and tokenizer load (median over rounds): what the chunking call itself needed. |
-| `rss_peak_mb`, `init_ms` | Highest peak resident memory over the rounds (whole process); import plus tokenizer load time, excluded from MiB/s. |
+| Markdown and plain text, passed as `str` or read from UTF-8 files | HTML, PDF, DOCX loaders |
+| Tokenizers: `cl100k_base`, `o200k_base`, `p50k_base`, `r50k_base`, `chars`, `words`; Hugging Face `tokenizer.json` (build with the `hf` feature); any counter you supply from Rust through the `Tokenizer` trait (see [Pluggable tokenizers](#pluggable-tokenizers)) | Code-aware splitting (no AST, no function/class boundaries) |
 
-### Chunks and budget
+Convert other formats to Markdown or text before chunking.
 
-| Column | Meaning |
+### Installation from source
+
+Requires a Rust toolchain:
+
+```bash
+pip install maturin
+maturin develop --release        # into the active virtualenv
+# or: maturin build --release    # build a wheel into target/wheels/
+```
+
+---
+
+## 📖 Chunking modes
+
+### `include_context=True` (default): Markdown-aware
+
+The Markdown block parser runs. Headings are tracked and attached to chunks as `headers`; the
+label `[ctx:A > B] ` counts against `max_length` (at most about a quarter of the budget is
+reserved for it). Fenced code blocks and list items stay intact when they fit, and adjacent
+blocks are packed together while they fit (`merge_blocks=True`). Tables, block quotes, HTML
+blocks and indented code get no special handling; see
+[Markdown support](#markdown-support-and-commonmark-conformance).
+
+### `include_context=False`: flat mode
+
+This is **not** "the same thing without the header prefix". Flat mode does not parse Markdown
+at all: the text is cut into token windows (honouring `overlap`) that prefer paragraph, line and
+word boundaries.
+
+- Code fences, lists and tables are **not** protected and can be cut.
+- Headings are ordinary text and `headers` is always empty; `merge_blocks` has no effect.
+- `chunk()` and `chunk_batch()` always behave this way.
+- `from_file`, `from_files` and `from_file_stream` give exactly the chunks `chunk()` gives for
+  the file's text, at any size. Flat mode needs the whole file in memory (peak memory is roughly
+  an order of magnitude larger than the file for ASCII text; this is estimated from the data
+  structures, not measured), so files larger than 32 MiB raise `OSError` instead of being
+  chunked differently. To process bigger files with bounded memory, use `include_context=True`
+  (streamed), or split the file first.
+
+Use flat mode when you want plain overlapping token windows over arbitrary text; use the default
+mode for Markdown documents.
+
+
+## 📈 Benchmarks
+
+text_chipper is compared with seven other ways of chunking text on the same inputs: 12 workloads (synthetic
+prose, Markdown and code, real-world texts such as PubMed, finance, Wikipedia and chat logs, and stress
+cases), 512-token chunks, `cl100k_base`, no overlap. All charts below show the **single-core** lane.
+
+Setup: GitHub Actions runner (AMD EPYC 9V74, 4 logical CPUs, 15.6 GB RAM), Python 3.12.16, cold start (every
+timing is the first and only call in a fresh process), median of 5 rounds. Compared libraries: chonkie 1.7.0,
+langchain-text-splitters 1.1.3, semchunk 4.1.1, semantic-text-splitter 0.33.2, tiktoken 0.14.0 (plain token
+window). `text_chipper` is the default mode (Markdown-aware, strict) and `text_chipper (flat)` is
+`include_context=False`. Results come from one run on a shared virtual machine, so treat the ratios as
+indicative, especially on the small files (under 120 KiB, where a call takes only a few milliseconds).
+Method, metric definitions, raw data and the harness are in [`benchmarks/`](benchmarks/).
+
+### Speed
+
+Throughput averaged over all 12 workloads (geometric mean): text_chipper reaches 34.0 MiB/s, which is 2.8
+times the speed of a plain tiktoken token window and 4.4 to 15 times the speed of the other chunking
+libraries.
+
+![Bar chart: geometric-mean throughput of each library over all 12 workloads](benchmarks/charts/speed_overall.png)
+
+text_chipper is the fastest library on 11 of 12 workloads. The exception is `stress_cjk_unbroken` (a megabyte
+of CJK text without separators), where it reaches 7.6 MiB/s while tiktoken window (15.8 MiB/s) and chonkie
+TokenChunker (11.2 MiB/s) are faster. On `real_chatlogs` (39 KiB, 2 to 3 ms per call) text_chipper reaches 20.4 MiB/s against 12.3 for
+tiktoken window, but at this call length the spread between processes is large (over 50 % for
+text_chipper), so treat that ratio as rough.
+
+![Heat map: MiB/s of each library on each workload](benchmarks/charts/speed_per_workload.png)
+
+### Memory
+
+Peak memory of the whole Python process (interpreter and imported library included), single core, mean over
+all workloads. Every library stays between 96 and 104 MB, most of it the interpreter and the tokenizer.
+text_chipper adds 1.4 MB on average while chunking and about 10 MB on its worst workload.
+
+![Bar chart: peak memory of the Python process per library, single core](benchmarks/charts/memory_single_core.png)
+
+### Chunk quality
+
+![Scorecard: token limit, words, source text and code fences per library, with speed](benchmarks/charts/quality_scorecard.png)
+
+- **Token limit**: no text_chipper chunk exceeded 512 tokens on any workload. LangChain went over the limit
+  in up to 16.7 % of chunks (3 of the 18 chunks of `real_chatlogs`; its largest chunk had 514 tokens), and
+  tiktoken window and chonkie TokenChunker in 2.6 % of the chunks of `multilingual` (513 tokens). Token
+  counts are measured independently with `cl100k_base` on the text each library delivers.
+- **Words and code**: token windows cut words in half (up to 35.5 % of their cut points) and break 21 to 23 %
+  of the small code fences (those that fit in half the budget); chonkie RecursiveChunker breaks about 22 %.
+  text_chipper made one cut inside a word in the whole run (1 of 1,259 cut points in `stress_giant_list`,
+  none on the other 11 workloads) and kept every small fence whole (392 in `markdown_doc`, 3,434 in
+  `code_heavy`).
+- **Coverage** means the share of the input's non-whitespace text that appears in some chunk. text_chipper
+  (default mode) covers 99.57 % of `markdown_doc` and 100 % of the other 11 workloads. The 3,613
+  non-whitespace characters missing from the chunk text of `markdown_doc` are all heading text, which
+  text_chipper returns in each chunk's `headers` (and in `contextualized_text`) instead of the chunk body;
+  counting them, coverage is 100 % and no character is unexplained. text_chipper (flat) covers 100 %
+  everywhere. tiktoken window, chonkie TokenChunker and chonkie RecursiveChunker lose a third (32.6 %) of the
+  unsegmented CJK input, and tiktoken window and chonkie TokenChunker lose 27.6 % of `multilingual`: their
+  chunks contain replacement characters (U+FFFD) instead of the original text.
+- **Chunk ends**: semchunk and chonkie RecursiveChunker end slightly more chunks at a sentence or line break
+  on average (91.7 % against 85.9 % for text_chipper). The gap comes mostly from `real_wikitexts` (43.1 %
+  against 100 %) and `real_pubmed` (88.2 % against 100 %).
+
+To regenerate the charts after a new benchmark run:
+
+```bash
+pip install matplotlib
+python benchmarks/make_charts.py benchmarks/results/20261113_213722/results.json benchmarks/charts
+```
+
+---
+
+
+## 🔌 Pluggable tokenizers
+
+The chunker only needs one thing from a tokenizer: how many tokens a piece of text has. Built-in
+backends cover the OpenAI encodings, `chars`, `words` and Hugging Face `tokenizer.json` files
+(which covers Llama, DeepSeek, Gemini-style and most open models). For anything else, Rust users
+can supply their own counter by implementing the `Tokenizer` trait:
+
+```rust
+use std::sync::Arc;
+use text_chipper::{Backend, Tokenizer};
+
+struct MyTokenizer; // wrap SentencePiece, a model-specific BPE, a lookup table, ...
+
+impl Tokenizer for MyTokenizer {
+    fn count_tokens(&self, text: &str) -> usize {
+        text.split_whitespace().count() // your counting logic
+    }
+    // Optional, with safe defaults:
+    // fn joins_are_additive(&self) -> bool { false }
+    // fn initial_ratio(&self) -> f64 { 4.0 }
+}
+
+let backend = Backend::from_tokenizer(Arc::new(MyTokenizer));
+// or, for a quick closure:
+let backend = Backend::from_fn(|text| text.chars().count() / 4);
+```
+
+Pass the resulting `Arc<Backend>` to `SmartChunker`, `smart_chunk` and the other entry points
+exactly as you would a built-in backend.
+
+Your counter must be:
+
+- **Deterministic**: the same text always gives the same count.
+- **Monotone on prefixes**: `count(prefix) <= count(prefix + more)`. The window search relies on
+  it; strict mode still re-counts every delivered chunk but cannot repair a non-monotone counter.
+- **Thread-safe and cheap** (`Send + Sync`): it is called many times per chunk and possibly from
+  several threads, so avoid blocking I/O per call.
+
+`joins_are_additive` should stay `false` unless you have verified that
+`count(A + sep + B) <= count(A) + count(sep) + count(B)` for newline-terminated separators; with
+`false` the chunker keeps a safety slack when merging blocks. `initial_ratio` (bytes per token) only
+seeds the window search and affects speed, never correctness.
+
+The Python API does not accept a custom counter yet: use `encoding=` or `tokenizer_file=`.
+
+## Markdown support and CommonMark conformance
+
+text_chipper is a chunker, not a CommonMark parser. Its block parser decides where a chunk may
+start or be cut; it does not build a document tree. It reads one line at a time and keeps only
+bounded state, which is what lets it stream files of any size with exact offsets. It recognizes
+only what that job needs:
+
+| Construct | Handling |
 | --- | --- |
-| chunks | Number of chunks returned. |
-| max tok (`tokens_max`) | Largest chunk, in reference tokens, of the delivered text. |
-| over % (`over_limit_pct`) | Share of chunks above the 512-token budget. `over_limit_chunks` and `worst_overshoot_pct` give the count and the worst excess. |
-| `fill_ratio`, `tokens_p5` / `p50` / `p95` | Mean fill of the budget and the token-count distribution. Higher fill means fewer chunks, not better chunks. |
-| `tiny_chunk_pct` | Share of chunks (all but the last) under 10 % of the budget. |
+| Text separated by blank lines | One **block**, the unit that is packed into chunks and split last. A paragraph, a table or a block quote with no blank line inside is one block, until a fence or heading line ends it |
+| Fenced code blocks (`` ``` `` and `~~~`, opening fence indented at most three spaces) | One block, kept intact when it fits; never scanned for headings |
+| ATX headings (`# Title`) and short setext headings (at most two lines and 160 characters) | Become `headers`, not body text |
+| YAML (`---`) and TOML (`+++`) front matter at the start of a document | Kept verbatim as one metadata block; an unterminated one is abandoned after 200 lines or 32 KiB |
+| List items (nested, ordered, lazy continuation, inside block quotes) | Located by a dedicated scanner and used as cut points: when a block must be split, item boundaries are preferred over line boundaries, and an item that fits is kept whole, even when blank lines inside it make it several blocks |
+| Tables, block quotes, HTML blocks, indented code, link reference definitions | **No special handling.** They are ordinary text. A long table is cut preferably at line boundaries and its header row is not repeated |
 
-### Fidelity: is the source preserved?
+### Measured agreement with `pulldown-cmark`
 
-| Column | Meaning |
+`cargo test --features diagnostics commonmark_block_boundary -- --nocapture` (after
+`python scripts/fetch_commonmark.py`) compares the lines on which our parser starts blocks with the
+lines on which `pulldown-cmark` starts top-level blocks, over the 652 examples of the CommonMark
+0.31.2 spec. It compares block **start lines only**: not block contents, end positions or nested
+structure. ATX headings are left out (they become `headers`, not blocks) and GFM tables are not
+part of the corpus.
+
+| Measurement | Result |
 | --- | --- |
-| located % (`located_pct`) | Share of chunks whose body is found verbatim, in order, as an exact substring of the input. A chunk that was altered, re-encoded or contains replacement characters is not located. |
-| body cov % (`coverage_pct`) | Share of the input's non-whitespace characters that lie inside at least one located chunk body. |
-| content cov % (`content_coverage_pct`) | Like body coverage, but a heading line missing from every body still counts as preserved when the next chunk lists its title in its `headers` metadata. The heading's own markup (`#`, setext underline) counts together with the title. Everything else that is missing stays missing. |
-| `lost_nonspace_chars`, `heading_meta_chars`, `lost_unexplained_chars` | Characters missing from bodies; how many of them are carried as heading metadata; and the rest, which is really lost (`lost_unexplained = missing − carried`). |
-| `duplication_pct` | Extra text caused by overlap. |
-| `replacement_char_chunks` | Chunks that contain the replacement character U+FFFD although the source has none. |
+| Examples where every block start agrees | 496 / 652 (76.1 %) |
+| Same, ignoring link reference definitions | 567 / 652 (87.0 %) |
+| Our block starts with no reference counterpart | 145 / 844 (17.2 %); 70 / 769 (9.1 %) ignoring link reference definitions |
+| Reference block starts we also start (recall) | paragraph 96.2 %, code block 96.9 %, HTML block 96.4 %, block quote 92.5 %, list 90.2 %, thematic break 40.6 % |
 
-### Boundary quality
+### Where we differ from CommonMark, and why
 
-| Column | Meaning |
-| --- | --- |
-| mid-word % (`mid_word_cut_pct`) | Share of cut positions (between neighbouring chunks) with a word character on both sides. Not defined for scripts written without spaces (CJK, Thai and others), which never count as word characters. |
-| clean end % (`clean_end_pct`) | Share of chunk ends (all but the last) that follow sentence-ending punctuation or sit at a line break. A style measure, not a guarantee. |
-| orphan h % (`orphan_heading_pct`) | Markdown only. Share of chunks (all but the last) whose last non-blank line is a heading, that is a heading left behind away from its section. For text_chipper headings are metadata, not body text. |
-| fence ok % (`fence_intact_pct`) | Markdown only. Share of code fences that fit in half the budget and lie completely inside one chunk. `fences_measured` is how many were counted. |
-| `overlap_tokens_median`, `overlap_tokens_max`, `overlap_violation_pct` | Only with overlap above 0: token overlap between neighbouring chunks, and the share above the requested overlap. |
+Three differences are deliberate. When choosing them, usefulness of the resulting chunks mattered
+more than agreement with CommonMark. We have **not** benchmarked retrieval quality for these
+choices, so the reasons below are design rationale, not measured results.
 
-### Answer-span alignment (an oracle proxy)
+1. **Link reference definitions stay text.** CommonMark consumes them without producing a block,
+   which accounts for 75 of the 145 extra starts. Chunks must cover the source text, so a
+   definition is ordinary content here.
+2. **A blank line always ends a block**, even inside lists, indented code and HTML blocks that
+   CommonMark treats as one block. This accounts for 69 of the remaining 70 extra starts (the
+   last one is an edge case involving a link reference definition, example 216). A blank line is
+   the cheapest reliable boundary signal in prose, and it keeps the parser line-oriented without
+   tracking containers. For lists the chunker compensates: an item that fits is kept whole across
+   blank lines (covered by tests). Inside indented code and HTML blocks there is no such
+   compensation, so a blank line there can become a cut point when the block does not fit.
+3. **Lists, block quotes, thematic breaks and HTML blocks do not interrupt a paragraph.** They
+   start a new block only after a blank line. A line that introduces a list ("Steps:") therefore
+   stays in the same block as the list, and the two are never separated while the block fits.
+   The cost is that a quote or thematic break written directly under a paragraph line belongs to
+   that paragraph's block. All 52 block starts we miss begin directly after a non-blank line,
+   where our parser starts a new block only at a fence or a heading; 32 of them are themselves
+   lists, block quotes, thematic breaks or HTML blocks.
 
-For each excerpt (a question's reference span in the real corpora, a sampled span otherwise) the benchmark
-takes every chunk that touches it, as a perfect retriever would. It is not an end-to-end retrieval test.
+Do not use text_chipper as a CommonMark implementation. If you need an AST or the exact
+CommonMark block structure, use a Markdown parser and chunk its output.
 
-| Column | Meaning |
-| --- | --- |
-| IoU (`oracle_iou_mean`) | Token overlap between the excerpt and the union of the touching chunks, divided by the token size of their union. Penalizes chunks that carry a lot of unrelated text. Values are small (about 0.1) because chunks are large compared with excerpts; only compare libraries on the same workload. |
-| 1-chunk % (`single_chunk_hit_pct`) | Share of excerpts that lie completely inside one chunk. |
-| `oracle_recall_mean`, `chunks_per_span_mean`, `context_tokens_per_span_mean`, `gold_source` | Share of the excerpt covered, chunks needed per excerpt, tokens a retriever would have to read, and where the excerpts came from (`dataset` or `sampled`). |
+## ⚖️ Budget guarantee: `strict`
 
-## Reading the coverage numbers
+| | `strict=True` (default) | `strict=False` |
+| --- | --- | --- |
+| Final exact re-count of every delivered chunk | yes | no |
+| `token_count <= max_length` guaranteed | yes | **no** |
+| `token_count` | exact | may be an estimate |
+| A single grapheme cluster larger than the budget | raises `ValueError` | returned as its own oversized chunk |
+| Speed | slightly slower | faster |
 
-text_chipper's default mode shows **99.568 %** in `body cov %` on `markdown_doc` and 100 % in
-`content cov %`. Both are correct, and they measure different things.
+Use strict mode whenever chunks are fed to an embedding model or a context window with a hard
+limit. Non-strict mode is a best-effort mode for cases where the budget is only a target.
 
-text_chipper does not repeat Markdown headings in the chunk body. It returns them as `headers` metadata and
-as the `[ctx:A > B]` label of `contextualized_text`. In this run 3,613 non-whitespace characters of
-`markdown_doc` are heading lines that appear in no chunk body. The benchmark checks each of them against the
-`headers` of the first chunk that starts after the heading: all 3,613 are carried there, so
-`heading_meta_chars` is 3,613 and `lost_unexplained_chars` is 0. That is the 100 % in `content cov %`.
 
-If your pipeline only embeds `chunk.text`, headings are not part of what you embed; use
-`contextualized_text` or the `headers` field to keep them. text_chipper (flat) has no header metadata and
-reports 100 % in both columns. The other 11 workloads have no heading text that is missing from bodies, so
-both columns read 100 % there.
+## ⚠️ Errors
 
-For a breakdown of any run on your own file, `python diag_lost.py --size-mib 1.0` (or `--file README.md`)
-sorts every missing character into `carried` (heading listed in `headers`), `heading` (heading not listed:
-really lost), `fence` and `other` (really lost).
+Every failure is raised as an exception and nothing returns a partial or empty result for bad
+input:
 
-Libraries that lose text in this benchmark do so differently: tiktoken window and chonkie TokenChunker lose
-32.6 % of `stress_cjk_unbroken` and 27.6 % of `multilingual`, and chonkie RecursiveChunker loses 32.6 % of
-`stress_cjk_unbroken`. In all of these the affected chunks contain replacement characters (U+FFFD) instead
-of the original text, which `located %` and `replacement_char_chunks` show.
+- `ValueError`: invalid configuration, unknown encoding, or (strict mode) a grapheme that does
+  not fit the budget.
+- `RuntimeError`: the tokenizer backend failed to load (e.g. missing or invalid `tokenizer_file`).
+- `OSError`: unreadable file, invalid UTF-8 (unless `errors="replace"`), a physical line
+  longer than 1 MiB in the streaming reader (`include_context=True`), or a file larger than
+  32 MiB in flat mode (`include_context=False`).
+- `chunk_batch` and `from_files` raise the error of the **first** failing input in input order
+  and return no partial results.
 
-## Caveats
+## Known limitations
 
-- **One run on a shared virtual machine.** The load average was 1.3 when the run started and no run was
-  repeated. Treat ratios as indicative. The small corpora (`real_chatlogs`, `real_state_of_the_union`,
-  `real_wikitexts`) take only a few to a few tens of milliseconds per call, where a single slow process moves the median; the `spread %`
-  column shows it (up to 534 % for one 1.4 ms cell).
-- **Python entry points only.** The timed call is the library's Python API, including the boundary to native
-  code where a library has one. Results for other languages or the Rust API are not covered.
-- **Defaults everywhere.** Nothing is tuned for any library, and a tuned configuration of another library may
-  differ. Overlap above 0 is supported by the harness but was not part of the published run.
-- **Chunk quality is not retrieval quality.** The metrics describe chunk boundaries and fidelity. The
-  answer-alignment numbers are an oracle proxy; no embedding model or retriever was evaluated.
-- **Header context counts against text_chipper's budget.** The delivered text includes the `[ctx:...]` label,
-  and it is within 512 tokens. The other libraries have no such label.
-- **The tiktoken window is a baseline,** not a recommended chunker. It is in the table to show what
-  token-exact windows cost and what they break.
+- Non-strict mode gives no budget guarantee (see above).
+- Flat mode reads whole files (32 MiB limit); streaming with bounded memory is only available
+  with `include_context=True`.
+- Block recognition is limited to what [Markdown support](#markdown-support-and-commonmark-conformance)
+  lists. In particular there is no table, block quote or HTML block handling, and a long table
+  is split without repeating its header row.
+- Custom Rust tokenizers are not available from Python yet, and a counter that is not
+  deterministic or not monotone on prefixes can produce suboptimal chunk boundaries.
+- With a Hugging Face tokenizer, a tokenizer failure while counting falls back to the character
+  count (counting has no error channel). This should not happen for valid text; treat counts as
+  best effort in that unlikely case.
+- `from_file_stream(..., batch_size_lines=...)` accepts but ignores `batch_size_lines`.
 
-## Adding a library, tests, reproducibility
+## 🧪 Development & Testing
 
-- **Add a library:** add one `Adapter` to `chunkbench/adapters.py`, following the rules in the module
-  docstring, and run `python -m chunkbench check`.
-- **Self-tests of the harness:** `pytest benchmarks/tests -q` from the repository root. They use stub
-  contestants and a crude tokenizer, never for published numbers.
-- **Reproducibility:** synthetic corpora use a fixed seed (`--seed 20260101`), real corpora are verified by
-  SHA-256, and `results.json` records the exact library versions, Python version, CPU, commit and arguments.
-  Keep `pip_freeze.txt` and `commit.txt` next to a published run.
-- **Other scripts:** `diag_lost.py` explains missing characters (see above); `diag_real.py` shows first-call,
-  repeated-call and fresh-text timings per corpus, and with a `stats` build (`maturin develop --release
-  --features stats`) the tokenizer calls per call site.
+```bash
+cargo test --release                    # unit, oracle, property and robustness tests
+pytest tests -v                         # Python binding tests (after `maturin develop`)
+python scripts/fetch_commonmark.py      # refresh the pinned CommonMark 0.31.2 corpus
+cargo test --features diagnostics commonmark_block_boundary -- --nocapture   # block-boundary agreement report
+scripts/run_release_suite.sh          # all tests + diagnostics, with summary
+scripts/run_validation.sh             # full validation matrix
+pytest benchmarks/tests -q              # self-tests of the benchmark harness
+```
+
+Repository layout: `src/` library code; `src/tests/` Rust test modules (unit, oracle, parallel,
+robustness, release suite); `tests/` Python binding tests and fixtures; `benches/` criterion
+microbenchmarks; `benchmarks/` cross-library benchmark; `integrations/` LangChain and LlamaIndex adapters; `scripts/` validation and profiling tools.
+
+The long-running reports, stress tests and the release suite are compiled only with the
+`diagnostics` feature, so a plain `cargo test` lists just the regular tests. Run them with
+`cargo test --release --features diagnostics -- --nocapture --test-threads=1`, or one at a time
+by name.
+
+Cargo features: `python` (default marker), `mimalloc` (default; disable if your Rust application
+sets its own global allocator), `hf` (Hugging Face tokenizers), `stats` (tokenizer-call
+profiling, see `scripts/profile_tokenizer.py`), `diagnostics` (long-running diagnostic tests and the
+release suite).
+
+## 📄 License
+
+Licensed under the [Apache License, Version 2.0](LICENSE).
