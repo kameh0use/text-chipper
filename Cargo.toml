@@ -42,7 +42,7 @@ diagnostics = []
 stats = []
 
 [dependencies.tokenizers]
-version = "0.19"
+version = "0.23"
 optional = true
 
 [dev-dependencies]
