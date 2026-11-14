@@ -85,7 +85,7 @@ jobs:
             cat "${run_dir}report.md"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: benchmarks/ci_results/
