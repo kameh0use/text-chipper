@@ -102,7 +102,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist-${{ matrix.wheel }}
           path: dist
@@ -127,7 +127,7 @@ jobs:
     permissions:
       id-token: write   # PyPI trusted publishing (no API token stored in GitHub)
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: dist-*
           merge-multiple: true
