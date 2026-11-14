@@ -231,7 +231,7 @@ one string, see the notes below.
   and reached 30.9 MiB/s; the other libraries stayed on one core.
   If you have the cores and memory, block mode is faster than streaming; streaming is the choice when memory is the limit.
 
-<details>
+<details open>
 <summary>All-cores lane charts (speed and memory)</summary>
 
 ![Bar chart: throughput of each library on a 514 MiB file, all-cores lane](benchmarks/charts/streaming_speed_all.png)
