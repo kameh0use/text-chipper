@@ -104,7 +104,7 @@ jobs:
             blocks)  MODES="$CHIPPER $BLOCKS" ;;
             *)       MODES="$CHIPPER $BLOCKS $WHOLE" ;;
           esac
-          : > results.jsonl
+          : > results.json
           for mode in $MODES; do
             # ROUNDS timed runs (no verification), then one verify run for the quality columns.
             for r in $(seq 1 "$ROUNDS") verify; do
@@ -112,12 +112,12 @@ jobs:
               echo "::group::$mode $r ($LANE)"
               set +e
               timeout "$TIMEOUT" python benchmarks/streaming_bench.py corpus.txt \
-                  --mode "$mode" --lane "$LANE" $V --out results.jsonl
+                  --mode "$mode" --lane "$LANE" $V --out results.json
               rc=$?
               set -e
               echo "::endgroup::"
               if [ $rc -ne 0 ]; then
-                echo "{\"mode\":\"$mode\",\"lane\":\"$LANE\",\"status\":\"failed\",\"exit_code\":$rc}" >> results.jsonl
+                echo "{\"mode\":\"$mode\",\"lane\":\"$LANE\",\"status\":\"failed\",\"exit_code\":$rc}" >> results.json
                 break
               fi
             done
@@ -131,10 +131,10 @@ jobs:
           {
             echo "## Streaming benchmark: WikiText-103 raw (${SIZE} MiB), 512-token chunks, $LANE lane"
             echo
-            python benchmarks/summarize_streaming.py results.jsonl
+            python benchmarks/summarize_streaming.py results.json
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
           name: streaming-results-${{ matrix.lane }}
-          path: results.jsonl
+          path: results.json
