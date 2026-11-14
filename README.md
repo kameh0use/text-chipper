@@ -85,6 +85,28 @@ maturin develop --release        # into the active virtualenv
 # or: maturin build --release    # build a wheel into target/wheels/
 ```
 
+### Install size and startup
+
+text_chipper has no runtime dependencies. The macOS arm64 wheel is 2.4 MiB (3.9 MB installed), and one `abi3`
+wheel per platform covers Python 3.9 and newer. Compared with the other libraries, installed into empty
+virtual environments on the same machine:
+
+| Library | Dependencies | Installed size | `import` | Import + tokenizer + first chunk |
+| --- | ---: | ---: | ---: | ---: |
+| **text_chipper** | **0** | **~4 MB** | **~2 ms** | **26 ms** |
+| semantic-text-splitter | 0 | ~16 MB | 2 ms | 49 ms |
+| tiktoken (plain window) | 6 | ~8 MB | 21 ms | 130 ms |
+| semchunk | 1 | ≤1 MB | 52 ms | 165 ms |
+| chonkie | 11 | ~47 MB | 152 ms | 260 ms |
+| langchain-text-splitters | 33 | ~45 MB | 207 ms | 307 ms |
+
+Measured on macOS arm64 with Python 3.15, one measurement per library, warm start. Installed size is the size of
+the virtual environment minus an empty one (about ±1 MB). The last column uses the benchmark adapters
+(`import`, loading `cl100k_base`, chunking a tiny text), so it includes each library's tokenizer; semchunk's
+own size does not include the tokenizer it needs. The first import after a fresh install took about 0.5 s on
+macOS once (probably the system checking the new binary); later imports took about 2 ms. Linux and Windows were
+not measured. How to reproduce: [`benchmarks/README.md`](benchmarks/README.md#install-footprint).
+
 ---
 
 ## 📖 Chunking modes

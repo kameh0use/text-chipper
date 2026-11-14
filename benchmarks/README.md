@@ -83,6 +83,36 @@ All-cores lane:
 
 ![Memory growth on a 514 MiB file, all-cores lane](charts/streaming_memory_all.png)
 
+## Install footprint
+
+Dependencies, installed size and startup time, measured outside the harness (macOS arm64, Python 3.15, one
+measurement per library). The numbers are in the main README under "Install size and startup".
+
+```bash
+# One empty virtual environment per library, then count packages and measure the size
+python3 -m venv /tmp/empty && du -sk /tmp/empty/lib/python*/site-packages | cut -f1     # baseline in KB
+for p in chonkie langchain-text-splitters semchunk semantic-text-splitter tiktoken; do
+  python3 -m venv /tmp/c_$p && /tmp/c_$p/bin/pip install -q $p
+  echo "$p: $(/tmp/c_$p/bin/pip list --format=freeze | grep -vc '^pip==') packages (including itself)," \
+       "$(du -sk /tmp/c_$p/lib/python*/site-packages | cut -f1) KB"
+done
+
+# import time (run each twice and read the second; the first can include one-off system checks)
+/tmp/c_chonkie/bin/python -c "import time; t=time.perf_counter(); import chonkie; print(round(1000*(time.perf_counter()-t)), 'ms')"
+
+# import + tokenizer load + first chunk, through the benchmark adapters (from the benchmarks/ folder)
+python3 -c "
+import time
+t = time.perf_counter()
+from chunkbench import adapters
+r = adapters.ADAPTERS['text_chipper'].build(adapters.Ctx(512, 0, 'plain', 'cl100k_base'))
+r.run('# Title\n\nSome text.\n')
+print(round(1000 * (time.perf_counter() - t)), 'ms')
+"
+```
+
+The size of the text_chipper wheel is the size of the file `pip download text-chipper --no-deps` saves.
+
 ### Limits
 
 - One workflow run per lane on shared virtual machines. The two lanes ran on different machines, so do not compare lanes
