@@ -46,7 +46,7 @@ A plain token window cuts wherever the budget ends. On Markdown, that can
 mean a code block split in the middle of a line. Same input, same budget 
 (`max_length = 62`, kept small so it fits on a screen):
 
-![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](examples/docs/before_after.svg)
+![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](docs/before_after.svg)
 
 Reproduce it with [`examples/before_after.py`](examples/before_after.py).
 
