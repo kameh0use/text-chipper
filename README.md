@@ -191,6 +191,64 @@ python benchmarks/make_charts.py benchmarks/results/20261113_213722/results.json
 ---
 
 
+### Large files and streaming
+
+The comparison above uses files of up to about 1 MB. To see what happens on a big input, we chunked one
+514.3 MiB text file (WikiText-103 raw) with 512-token chunks, `cl100k_base` and no overlap. Each run is a fresh
+process on a GitHub Actions runner (4 logical CPUs, Python 3.12), and every library is configured exactly as in the
+benchmark above. Time includes reading the file. Memory is the growth of the process's peak memory after warm-up.
+Numbers are medians of 3 runs from one workflow run per lane; this section shows the single-core lane, the all-cores
+lane and the raw data are in [`benchmarks/results/streaming_20261114/`](benchmarks/results/streaming_20261114/).
+
+text_chipper reads the file with `from_file_stream`. The other libraries take a string, so they were given the file in
+blocks of about 8 MiB (text_chipper also ran in this block mode). Every library also ran on the whole file read into
+one string, see the notes below.
+
+![Bar chart: throughput of each library on a 514 MiB file, single-core lane](benchmarks/charts/streaming_speed_single.png)
+
+| Library | File given as | Time | MiB/s | Memory growth | Chunks over 512 tokens |
+| --- | --- | ---: | ---: | ---: | ---: |
+| text_chipper | `from_file_stream` | 24 s | 21.3 | 71 MB | 0 |
+| text_chipper | 8 MiB blocks | 28 s | 18.0 | 130 MB | 0 |
+| tiktoken window | 8 MiB blocks | 39 s | 13.1 | 149 MB | 5 of 234,790 |
+| chonkie RecursiveChunker | 8 MiB blocks | 41 s | 12.4 | 117 MB | 0 |
+| chonkie TokenChunker | 8 MiB blocks | 47 s | 11.0 | 210 MB | 5 of 234,790 |
+| LangChain | 8 MiB blocks | 108 s | 4.8 | 83 MB | 10 of 292,611 |
+| semchunk | 8 MiB blocks | 112 s | 4.6 | 3.3 GB | 0 |
+| semantic-text-splitter | 8 MiB blocks | 158 s | 3.2 | 87 MB | 0 |
+
+- **Memory stays flat when streaming.** The process grew by 71 MB
+  on a 514 MiB file (125 MB peak for the whole process). Reading the file into one string and calling `chunk()` grew by
+  4.6 GB. The output is the same: the SHA-256 of the delivered
+  chunk text is identical for `from_file_stream` and for `chunk()` on the whole file, in both lanes.
+- **Speed.** Streaming on one core reaches 21.3 MiB/s,
+  1.6 to 6.7 times faster than the other libraries fed in blocks. The gap is smaller than on the small files above
+  (2.8 times against the tiktoken window there, 1.6 times here).
+- **All-cores lane.** `from_file_stream` is single-threaded (it used one core), so it reached
+  19.8 MiB/s there. text_chipper in block mode used about 2.4 cores
+  and reached 30.9 MiB/s; the other libraries stayed on one core.
+  If you have the cores and memory, block mode is faster than streaming; streaming is the choice when memory is the limit.
+- **Token limit at scale.** The overshoot is rare on this text: one-token overshoots (513) in 5 of 234,790 chunks
+  for the tiktoken window and chonkie TokenChunker, and in 10 of 292,611 for LangChain. text_chipper, chonkie
+  RecursiveChunker, semchunk and semantic-text-splitter had none. The 16.7 % above is for a small chat-log file, so the
+  rate depends on the text.
+
+Notes and limits:
+
+- **Whole-file mode.** All libraries peak at 4.6 to 9.0 GB when the file is read into one string (full table in
+  [`benchmarks/results/streaming_20261114/summary.md`](benchmarks/results/streaming_20261114/summary.md)).
+  text_chipper, LangChain, chonkie RecursiveChunker and semantic-text-splitter are within 2 MB of each other, which
+  suggests that the peak is set by reading the file into a Python string rather than by the library; we have not
+  verified this. The tiktoken window and chonkie TokenChunker also hold the full token list (7.7 and 9.0 GB).
+  semchunk grows to 3.3 GB even in block mode (probably its default token-count cache, not verified).
+- **Noise.** This is one workflow run per lane. The two lanes ran on different virtual machines, so do not compare
+  lanes for single-threaded modes, and the same streaming mode took between 22 and 29 s in different workflow runs.
+  Treat ratios as indicative.
+- **Blocks are our choice.** Feeding a string-only library in 8 MiB blocks is how one would process a large file with it;
+  chunks at block edges can differ from a one-call run.
+- **Not measured:** retrieval quality.
+
+
 ## 🔌 Pluggable tokenizers
 
 The chunker only needs one thing from a tokenizer: how many tokens a piece of text has. Built-in
@@ -337,6 +395,8 @@ input:
   count (counting has no error channel). This should not happen for valid text; treat counts as
   best effort in that unlikely case.
 - `from_file_stream(..., batch_size_lines=...)` accepts but ignores `batch_size_lines`.
+- `from_file_stream` is single-threaded; on several cores, `chunk()` (or chunking in blocks) is faster
+  but needs much more memory (see [Large files and streaming](#large-files-and-streaming)).
 
 ## 🧪 Development & Testing
 
