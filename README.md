@@ -30,7 +30,6 @@ Built in Rust with Python bindings.
 pip install text-chipper
 ```
 
-> Not on PyPI yet? Build from source, see [Installation from source](#installation-from-source).
 
 ```python
 from text_chipper import TextChipper
