@@ -217,6 +217,8 @@ one string, see the notes below.
 | semchunk | 8 MiB blocks | 112 s | 4.6 | 3.3 GB | 0 |
 | semantic-text-splitter | 8 MiB blocks | 158 s | 3.2 | 87 MB | 0 |
 
+![Bar chart: memory growth of each library on a 514 MiB file, single-core lane](benchmarks/charts/streaming_memory_single.png)
+
 - **Memory stays flat when streaming.** The process grew by 71 MB
   on a 514 MiB file (125 MB peak for the whole process). Reading the file into one string and calling `chunk()` grew by
   4.6 GB. The output is the same: the SHA-256 of the delivered
@@ -228,6 +230,15 @@ one string, see the notes below.
   19.8 MiB/s there. text_chipper in block mode used about 2.4 cores
   and reached 30.9 MiB/s; the other libraries stayed on one core.
   If you have the cores and memory, block mode is faster than streaming; streaming is the choice when memory is the limit.
+
+<details>
+<summary>All-cores lane charts (speed and memory)</summary>
+
+![Bar chart: throughput of each library on a 514 MiB file, all-cores lane](benchmarks/charts/streaming_speed_all.png)
+
+![Bar chart: memory growth of each library on a 514 MiB file, all-cores lane](benchmarks/charts/streaming_memory_all.png)
+
+</details>
 - **Token limit at scale.** The overshoot is rare on this text: one-token overshoots (513) in 5 of 234,790 chunks
   for the tiktoken window and chonkie TokenChunker, and in 10 of 292,611 for LangChain. text_chipper, chonkie
   RecursiveChunker, semchunk and semantic-text-splitter had none. The 16.7 % above is for a small chat-log file, so the

@@ -66,14 +66,22 @@ python benchmarks/summarize_streaming.py results.jsonl          # Markdown table
 python benchmarks/plot_streaming.py results/streaming_<date>/*.jsonl   # charts into benchmarks/charts/
 ```
 
-### Latest results (514.3 MiB, single-core lane)
+### Latest results (514.3 MiB)
 
 See [`results/streaming_20261114/summary.md`](results/streaming_20261114/summary.md) for both lanes and every mode,
 and the "Large files and streaming" section of the main README for the discussion.
 
+Single-core lane:
+
 ![Throughput on a 514 MiB file, single-core lane](charts/streaming_speed_single.png)
 
-![Memory growth on a 514 MiB file, single-core lane](charts/streaming_memory.png)
+![Memory growth on a 514 MiB file, single-core lane](charts/streaming_memory_single.png)
+
+All-cores lane:
+
+![Throughput on a 514 MiB file, all-cores lane](charts/streaming_speed_all.png)
+
+![Memory growth on a 514 MiB file, all-cores lane](charts/streaming_memory_all.png)
 
 ### Limits
 

@@ -1,9 +1,9 @@
 """Charts for the large-file benchmark (results of streaming_bench.py), in the style of the main charts.
 
-Usage: python benchmarks/plot_streaming.py benchmarks/results/streaming_20261114/*.jsonl [--out benchmarks/charts]
+Usage: python benchmarks/plot_streaming.py benchmarks/results/streaming_20261114/*.json [--out benchmarks/charts]
 
 Timing and memory medians use only the runs WITHOUT --verify (verification builds extra objects).
-Writes streaming_speed_single.{png,svg}, streaming_speed_all.{png,svg}, streaming_memory.{png,svg}.
+Writes streaming_speed_{single,all}.{png,svg} and streaming_memory_{single,all}.{png,svg}.
 """
 import argparse
 import json
@@ -116,8 +116,10 @@ def memory_chart(rows, lane, out, size):
                                   ("whole", med(rows, lane, f"{k}:whole", "growth_mb"), GRAY_L)]))
     n_bars = sum(len(b) for _, b in groups)
     h = 1.9 + 0.2 * n_bars + 0.28 * len(groups)
-    fig = frame("Large file: memory",
-                f"Growth of peak process memory while chunking one {size:.0f} MiB file, single-core lane (log scale). Lower is better.\n"
+    lane_title = "single-core" if lane == "single" else "all cores"
+    lane_txt = "single-core lane" if lane == "single" else "all-cores lane, library defaults"
+    fig = frame(f"Large file: memory, {lane_title}",
+                f"Growth of peak process memory while chunking one {size:.0f} MiB file, {lane_txt} (log scale). Lower is better.\n"
                 "Blocks: ~8 MiB at a time. Whole: file read into one Python string, then one call.",
                 FOOTER.format(size=size), h)
     ax = fig.add_axes([0.26, 0.9 / h, 0.60, 1 - (1.9 / h) - 0.04])
@@ -150,7 +152,7 @@ def memory_chart(rows, lane, out, size):
     ax.set_xticklabels(["100 MB", "1 GB", "10 GB"])
     ax.minorticks_off()
     ax.set_xlabel("growth of peak memory", fontsize=9, color=INK2)
-    save(fig, out, "streaming_memory")
+    save(fig, out, f"streaming_memory_{lane}")
 
 
 if __name__ == "__main__":
@@ -165,4 +167,5 @@ if __name__ == "__main__":
     speed_chart(rows, "single", out, size)
     speed_chart(rows, "all", out, size)
     memory_chart(rows, "single", out, size)
+    memory_chart(rows, "all", out, size)
     print("wrote charts to", out)
