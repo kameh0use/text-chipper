@@ -30,7 +30,6 @@ Built in Rust with Python bindings.
 pip install text-chipper
 ```
 
-> Not on PyPI yet? Build from source, see [Installation from source](#installation-from-source).
 
 ```python
 from text_chipper import TextChipper
@@ -41,6 +40,16 @@ for chunk in chipper.chunk(open("README.md", encoding="utf-8").read()):
     print(chunk.token_count, chunk.headers)   # e.g. 487 ['Install', 'From source']
     print(chunk.contextualized_text)          # "[ctx:Install > From source] ..." + text
 ```
+### Why not just split every N tokens?
+
+A plain token window cuts wherever the budget ends. On Markdown, that can 
+mean a code block split in the middle of a line. Same input, same budget 
+(`max_length = 62`, kept small so it fits on a screen):
+
+![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](docs/before_after.svg)
+
+Reproduce it with [`examples/before_after.py`](examples/before_after.py).
+
 
 Other entry points: `chunk_batch(texts)`, `from_file(path)`, `from_files(paths)`,
 `from_file_stream(path)` (an iterator), `count_tokens(text)`.
@@ -115,7 +124,7 @@ text_chipper is compared with seven other ways of chunking text on the same inpu
 prose, Markdown and code, real-world texts such as PubMed, finance, Wikipedia and chat logs, and stress
 cases), 512-token chunks, `cl100k_base`, no overlap. All charts below show the **single-core** lane.
 
-Setup: GitHub Actions runner (AMD EPYC 9V74, 2 logical CPUs, 7.7 GB RAM), Python 3.12.16, cold start (every
+Setup: GitHub Actions runner (AMD EPYC 9V74, 4 logical CPUs, 15.6 GB RAM), Python 3.12.16, cold start (every
 timing is the first and only call in a fresh process), median of 5 rounds. Compared libraries: chonkie 1.7.0,
 langchain-text-splitters 1.1.3, semchunk 4.1.1, semantic-text-splitter 0.33.2, tiktoken 0.14.0 (plain token
 window). `text_chipper` is the default mode (Markdown-aware, strict) and `text_chipper (flat)` is
@@ -125,16 +134,17 @@ Method, metric definitions, raw data and the harness are in [`benchmarks/`](benc
 
 ### Speed
 
-Throughput averaged over all 12 workloads (geometric mean): text_chipper reaches 25.4 MiB/s, which is 2.0
-times the speed of a plain tiktoken token window and 3.3 to 11 times the speed of the other chunking
+Throughput averaged over all 12 workloads (geometric mean): text_chipper reaches 34.0 MiB/s, which is 2.8
+times the speed of a plain tiktoken token window and 4.4 to 15 times the speed of the other chunking
 libraries.
 
 ![Bar chart: geometric-mean throughput of each library over all 12 workloads](benchmarks/charts/speed_overall.png)
 
 text_chipper is the fastest library on 11 of 12 workloads. The exception is `stress_cjk_unbroken` (a megabyte
-of CJK text without separators), where it reaches 7.0 MiB/s while tiktoken window (15.8 MiB/s) and chonkie
-TokenChunker (11.2 MiB/s) are faster. On `real_chatlogs` (39 KiB, about 3 ms per call) text_chipper and
-tiktoken window are within noise of each other (14.2 and 13.4 MiB/s).
+of CJK text without separators), where it reaches 7.6 MiB/s while tiktoken window (15.8 MiB/s) and chonkie
+TokenChunker (11.2 MiB/s) are faster. On `real_chatlogs` (39 KiB, 2 to 3 ms per call) text_chipper reaches 20.4 MiB/s against 12.3 for
+tiktoken window, but at this call length the spread between processes is large (over 50 % for
+text_chipper), so treat that ratio as rough.
 
 ![Heat map: MiB/s of each library on each workload](benchmarks/charts/speed_per_workload.png)
 
@@ -175,7 +185,7 @@ To regenerate the charts after a new benchmark run:
 
 ```bash
 pip install matplotlib
-python benchmarks/make_charts.py benchmarks/results/20261112_233503/results.json benchmarks/charts
+python benchmarks/make_charts.py benchmarks/results/20261113_213722/results.json benchmarks/charts
 ```
 
 ---
