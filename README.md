@@ -239,6 +239,7 @@ one string, see the notes below.
 ![Bar chart: memory growth of each library on a 514 MiB file, all-cores lane](benchmarks/charts/streaming_memory_all.png)
 
 </details>
+
 - **Token limit at scale.** The overshoot is rare on this text: one-token overshoots (513) in 5 of 234,790 chunks
   for the tiktoken window and chonkie TokenChunker, and in 10 of 292,611 for LangChain. text_chipper, chonkie
   RecursiveChunker, semchunk and semantic-text-splitter had none. The 16.7 % above is for a small chat-log file, so the
