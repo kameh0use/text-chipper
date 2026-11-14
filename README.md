@@ -40,6 +40,16 @@ for chunk in chipper.chunk(open("README.md", encoding="utf-8").read()):
     print(chunk.token_count, chunk.headers)   # e.g. 487 ['Install', 'From source']
     print(chunk.contextualized_text)          # "[ctx:Install > From source] ..." + text
 ```
+### Why not just split every N tokens?
+
+A plain token window cuts wherever the budget ends. On Markdown, that can 
+mean a code block split in the middle of a line. Same input, same budget 
+(`max_length = 62`, kept small so it fits on a screen):
+
+![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](examples/docs/before_after.svg)
+
+Reproduce it with [`examples/before_after.py`](examples/before_after.py).
+
 
 Other entry points: `chunk_batch(texts)`, `from_file(path)`, `from_files(paths)`,
 `from_file_stream(path)` (an iterator), `count_tokens(text)`.
