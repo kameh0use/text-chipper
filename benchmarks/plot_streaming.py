@@ -1,6 +1,6 @@
 """Charts for the large-file benchmark (results of streaming_bench.py), in the style of the main charts.
 
-Usage: python benchmarks/plot_streaming.py benchmarks/results/streaming_20261114/*.json [--out benchmarks/charts]
+Usage: python benchmarks/plot_streaming.py benchmarks/results/streaming_20261114/*.jsonl [--out benchmarks/charts]
 
 Timing and memory medians use only the runs WITHOUT --verify (verification builds extra objects).
 Writes streaming_speed_{single,all}.{png,svg} and streaming_memory_{single,all}.{png,svg}.
@@ -75,7 +75,7 @@ def style_axes(ax):
 
 def speed_chart(rows, lane, out, size):
     items = [("text_chipper, stream", med(rows, lane, "text_chipper:stream", "mib_per_s"), BLUE, True),
-             ("text_chipper, blocks", med(rows, lane, "text_chipper:blocks", "mib_per_s"), BLUE_L, True)]
+             ("text_chipper, blocks", med(rows, lane, "text_chipper:blocks", "mib_per_s"), BLUE, True)]
     items += [(LABEL[k], med(rows, lane, f"{k}:blocks", "mib_per_s"), GRAY, False) for k in OTHERS]
     items = sorted([i for i in items if i[1] is not None], key=lambda i: -i[1])
     top = max(v for _, v, _, _ in items)
