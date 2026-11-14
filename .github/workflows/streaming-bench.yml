@@ -134,7 +134,7 @@ jobs:
             python benchmarks/summarize_streaming.py results.json
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: streaming-results-${{ matrix.lane }}
           path: results.json
