@@ -365,7 +365,7 @@ fn parallel_speedup_report() {
 
 #[test]
 fn par_map_ordered_returns_first_error_in_input_order() {
-    use crate::{errors::ChipError, python::par_map_ordered};
+    use crate::{errors::ChipError, parallel::par_map_ordered};
     use std::{thread::sleep, time::Duration};
 
     let items: Vec<usize> = (0..64).collect();

@@ -2,7 +2,7 @@
 //!
 //! The crate takes a `&str` and returns chunks that fit a token budget, never cut inside a
 //! grapheme cluster, and map back to the original input even when Unicode normalization is
-//! applied. The Python bindings are exposed through [`TextChipper`].
+//! applied. Python bindings (feature `python`) are exposed through `TextChipper`.
 //!
 //! # Scope
 //!
@@ -34,6 +34,7 @@
 //!   file's text, at any size; flat-mode files above 32 MiB are rejected with an error
 //!   (stream them with `include_context = true`). See [`ChunkConfig`].
 
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 mod backend;
@@ -44,6 +45,8 @@ mod errors;
 mod file;
 mod markdown;
 mod normalization;
+mod parallel;
+#[cfg(feature = "python")]
 mod python;
 mod split_engine;
 
@@ -58,15 +61,17 @@ pub use file::{read_text_file, FileChunker, FLAT_FILE_MAX_BYTES};
 pub use markdown::list_parser::{parse_list_items, ListItem, ListMarker};
 pub use markdown::BlockParser;
 pub use normalization::{NormBase, NormMap, Normalization, OrigSpan};
+#[cfg(feature = "python")]
 pub use python::{TextChipper, TextChunk, TextStreamIter};
 pub use split_engine::{split_by_tokens, CharCursor, Origin};
 
 // Optional so that Rust users who depend on this crate can keep their own global allocator.
-// The Python wheel is built with the default features, which include it.
+// Off by default; the `python` feature (used for the PyPI wheel) turns it on.
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+#[cfg(feature = "python")]
 #[pymodule]
 fn text_chipper(m: &Bound<'_, PyModule>) -> PyResult<()> {
     python::register(m)

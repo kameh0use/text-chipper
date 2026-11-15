@@ -9,6 +9,8 @@ keywords = ["chunking", "tokenizer", "markdown", "rag", "nlp"]
 categories = ["text-processing"]
 license = "Apache-2.0"
 repository = "https://github.com/kameh0use/text-chipper"
+# Keep the crates.io package small (benchmark results, plots and scripts stay out of it).
+include = ["/src/**", "/benches/**", "/tests/fixtures/**", "/Cargo.toml", "/README.md", "/LICENSE", "!.DS_Store"]
 
 [lib]
 name = "text_chipper"
@@ -22,16 +24,19 @@ unicode-segmentation = "1.11"
 rayon = "1.10"
 mimalloc = { version = "0.1.43", optional = true }
 
+# Python bindings. Optional: Rust users never compile or link PyO3. Enabled by `--features python`
+# (maturin does this for the wheel, see `[tool.maturin]` in pyproject.toml).
 [dependencies.pyo3]
 version = "0.30.1"
 features = ["abi3-py39"]
+optional = true
 
 [features]
-default = ["python", "mimalloc"]
-# Currently unused marker feature; kept so existing `--features python` invocations keep working.
-python = []
-# Use mimalloc as the global allocator. Disable (`default-features = false`) if your Rust
-# application sets its own allocator.
+# Pure-Rust library by default: no PyO3, and no global allocator forced on your application.
+default = []
+# Python extension module (PyPI wheel). Also turns on mimalloc, as the wheel always did.
+python = ["dep:pyo3", "mimalloc"]
+# Use mimalloc as the global allocator (opt-in for Rust applications).
 mimalloc = ["dep:mimalloc"]
 # Hugging Face `tokenizer.json` support (`tokenizer_file=` in Python).
 hf = ["dep:tokenizers"]

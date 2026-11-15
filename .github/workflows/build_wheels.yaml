@@ -34,6 +34,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --release
+      - name: Library must build without the Python feature and with it
+        run: |
+          cargo build --release --no-default-features
+          cargo check --release --features python
 
   sdist:
     name: sdist

@@ -459,8 +459,8 @@ The long-running reports, stress tests and the release suite are compiled only w
 `cargo test --release --features diagnostics -- --nocapture --test-threads=1`, or one at a time
 by name.
 
-Cargo features: `python` (default marker), `mimalloc` (default; disable if your Rust application
-sets its own global allocator), `hf` (Hugging Face tokenizers), `stats` (tokenizer-call
+Cargo features (none are on by default, so Rust users get a pure-Rust library): `python` (PyO3
+bindings; used by the PyPI wheel, implies `mimalloc`), `mimalloc` (opt-in global allocator), `hf` (Hugging Face tokenizers), `stats` (tokenizer-call
 profiling, see `scripts/profile_tokenizer.py`), `diagnostics` (long-running diagnostic tests and the
 release suite).
 

@@ -3,7 +3,8 @@ use std::sync::{Arc, Mutex};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use rayon::prelude::*;
+
+use crate::parallel::par_map_ordered;
 
 use super::{
     context_prefix, smart_chunk_mapped, Backend, ChipError, Chunk, ChunkConfig, FileChunker,
@@ -14,20 +15,6 @@ use super::{
 
 /// Raw per-file result: the chunks plus their spans in the original input.
 type RawFileChunks = (Vec<Chunk>, Vec<OrigSpan>);
-
-/// Parallel `items.iter().map(f).collect::<Result<Vec<_>, _>>()` with the sequential error
-/// semantics: when several items fail, the error of the FIRST failing item (in input order)
-/// is returned. rayon's own `collect::<Result<_, _>>()` returns an arbitrary one of them,
-/// which would make the reported error depend on thread scheduling.
-pub(crate) fn par_map_ordered<T, R, F>(items: &[T], f: F) -> Result<Vec<R>, ChipError>
-where
-    T: Sync,
-    R: Send,
-    F: Fn(&T) -> Result<R, ChipError> + Sync + Send,
-{
-    let results: Vec<Result<R, ChipError>> = items.par_iter().map(f).collect();
-    results.into_iter().collect()
-}
 
 fn to_pyerr(e: ChipError) -> PyErr {
     match e {

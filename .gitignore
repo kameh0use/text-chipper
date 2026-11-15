@@ -28,3 +28,6 @@ build/
 /benchmarks/corpora/
 # Benchmark: CI output (uploaded as a workflow artifact instead)
 /benchmarks/ci_results/
+
+# macOS
+.DS_Store
