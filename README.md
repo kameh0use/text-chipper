@@ -115,6 +115,15 @@ not measured. How to reproduce: [`benchmarks/README.md`](benchmarks/README.md#in
 
 ## 📖 Chunking modes
 
+| Mode | How to call | Markdown and headers | Memory | Speed | Use it for |
+| --- | --- | --- | --- | --- | --- |
+| Default, whole string | `chunk(text)` | Yes | Whole text in memory; 4.6 GB growth on the 514 MiB file | 34.0 MiB/s (geometric mean, small files) | Ingesting one Markdown page at a time in a web app or API, such as a docs page saved from a CMS |
+| Default, streaming | `from_file_stream(path)` | Yes | Bounded; 71 MB growth on the 514 MiB file | 21.3 MiB/s (514 MiB file) | Nightly re-indexing of a multi-GB Markdown knowledge-base export on a small worker with a fixed memory limit |
+| Default, 8 MiB blocks (benchmark setup) | `chunk()` on each block | Yes, per block | 130 MB growth on the 514 MiB file | 18.0 MiB/s (514 MiB file) | Not recommended; used in the benchmark to feed string-only libraries |
+| Flat | `TextChipper(include_context=False)` | No; `headers` always empty | Whole file in memory; 32 MiB limit | 23.0 MiB/s (geometric mean, small files) | Exported call-center or chat transcripts as plain text, where overlapping windows suit retrieval |
+
+The speed column is not one scale: the first and last rows are geometric means over the small benchmark files, the middle two are one 514 MiB file on one core.
+
 ### `include_context=True` (default): Markdown-aware
 
 The Markdown block parser runs. Headings are tracked and attached to chunks as `headers`; the
@@ -132,7 +141,7 @@ word boundaries.
 
 - Code fences, lists and tables are **not** protected and can be cut.
 - Headings are ordinary text and `headers` is always empty; `merge_blocks` has no effect.
-- `chunk()` and `chunk_batch()` always behave this way.
+- `chunk()` and `chunk_batch()` follow the mode you set: with `include_context=False` they behave this way.
 - `from_file`, `from_files` and `from_file_stream` give exactly the chunks `chunk()` gives for
   the file's text, at any size. Flat mode needs the whole file in memory (peak memory is roughly
   an order of magnitude larger than the file for ASCII text; this is estimated from the data
