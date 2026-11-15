@@ -3,7 +3,9 @@
 [![Rust Version](https://img.shields.io/badge/rust-1.88.0-orange.svg)](https://www.rust-lang.org/)
 [![Python](https://img.shields.io/badge/python-%E2%89%A53.9-blue.svg)](https://www.python.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](https://github.com/kameh0use/text-chipper)
+[![crates.io](https://img.shields.io/crates/v/text_chipper.svg)](https://crates.io/crates/text_chipper)
+[![docs.rs](https://img.shields.io/docsrs/text_chipper)](https://docs.rs/text_chipper)
+[![PyPI](https://img.shields.io/pypi/v/text-chipper.svg)](https://pypi.org/project/text-chipper/)
 
 High-performance, Markdown-aware, strictly budget-enforced text chunking for RAG and LLM pipelines.
 Built in Rust with Python bindings. 
@@ -25,6 +27,8 @@ Built in Rust with Python bindings.
 ---
 
 ## ⚡ Quick Start
+
+### Python
 
 ```bash
 pip install text-chipper
@@ -64,6 +68,39 @@ your original input (`orig_start_index`, `orig_end_index`, `orig_start_byte`, `o
 
 Adapters for LangChain and LlamaIndex are in [`integrations/`](integrations/).
 
+### Rust
+
+```bash
+cargo add text_chipper
+```
+
+```rust
+use text_chipper::{smart_chunk, Backend, ChunkConfig};
+
+fn main() -> Result<(), text_chipper::ChipError> {
+    let backend = Backend::from_name("cl100k_base")?;
+    let cfg = ChunkConfig {
+        max_tokens: 512,
+        overlap_tokens: 50,
+        ..Default::default()
+    };
+    let text = std::fs::read_to_string("README.md").expect("readable UTF-8 file");
+
+    for chunk in smart_chunk(&text, &cfg, &backend)? {
+        println!("{} {:?}", chunk.token_count, chunk.headers);
+        println!("{}", chunk.contextualized_text());
+    }
+    Ok(())
+}
+```
+
+The Rust crate is plain Rust: no Python or PyO3 is compiled and no global allocator is
+installed by default. Optional Cargo features: `mimalloc` (use mimalloc as the global
+allocator) and `hf` (Hugging Face `tokenizer.json` support). The `python` feature builds the
+Python extension module and is only meant for the PyPI wheel. See the
+[API documentation](https://docs.rs/text_chipper) for offsets, streaming (`FileChunker`) and
+custom tokenizers.
+
 ---
 
 
@@ -81,7 +118,8 @@ Convert other formats to Markdown or text before chunking.
 
 ### Installation from source
 
-Requires a Rust toolchain:
+Requires a Rust toolchain. `maturin` enables the `python` feature automatically
+(configured in `pyproject.toml`):
 
 ```bash
 pip install maturin
