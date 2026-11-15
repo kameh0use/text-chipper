@@ -1,5 +1,15 @@
 # text_chipper
 
+<table>
+<tr>
+<td valign="middle">
+<img src="docs/logo.svg" width="120" alt="text_chipper logo">
+</td>
+<td valign="middle">
+
+**High-performance, Markdown-aware, strictly budget-enforced text chunking for RAG and LLM pipelines.
+Built in Rust with Python bindings.**
+
 [![Rust Version](https://img.shields.io/badge/rust-1.88.0-orange.svg)](https://www.rust-lang.org/)
 [![Python](https://img.shields.io/badge/python-%E2%89%A53.9-blue.svg)](https://www.python.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
@@ -7,8 +17,9 @@
 [![docs.rs](https://img.shields.io/docsrs/text_chipper)](https://docs.rs/text_chipper)
 [![PyPI](https://img.shields.io/pypi/v/text-chipper.svg)](https://pypi.org/project/text-chipper/)
 
-High-performance, Markdown-aware, strictly budget-enforced text chunking for RAG and LLM pipelines.
-Built in Rust with Python bindings. 
+</td>
+</tr>
+</table>
 
 - **Token-exact budget.** In the default strict mode every chunk is re-tokenized exactly as it
   will be delivered (header context included), so `token_count <= max_length` always holds.
