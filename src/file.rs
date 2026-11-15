@@ -176,21 +176,28 @@ impl FileChunker {
         })
     }
 
+    // Memory diagnostics: read by the Python bindings and the tests only.
+    #[cfg_attr(not(feature = "python"), allow(dead_code))]
     pub(crate) fn peak_norm_map_segments(&self) -> usize {
         self.peak_norm_map_segments
     }
+    #[cfg_attr(not(feature = "python"), allow(dead_code))]
     pub(crate) fn current_norm_map_segments(&self) -> usize {
         self.map.segs.len()
     }
+    #[cfg_attr(not(feature = "python"), allow(dead_code))]
     pub(crate) fn peak_parser_open_bytes(&self) -> usize {
         self.peak_parser_open_bytes
     }
+    #[cfg_attr(not(feature = "python"), allow(dead_code))]
     pub(crate) fn peak_pending_bytes(&self) -> usize {
         self.peak_pending_bytes
     }
+    #[cfg_attr(not(feature = "python"), allow(dead_code))]
     pub(crate) fn peak_parser_gap_bytes(&self) -> usize {
         self.peak_parser_gap_bytes
     }
+    #[cfg_attr(not(feature = "python"), allow(dead_code))]
     pub(crate) fn peak_input_line_bytes(&self) -> usize {
         self.peak_input_line_bytes
     }
