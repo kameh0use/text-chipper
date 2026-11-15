@@ -1,75 +1,92 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1230 660" width="1230" height="660" role="img" aria-label="On the README, the fixed token window splits a code example and an emoji heading; text-chipper keeps both whole">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1230 540" width="1230" height="540" role="img" aria-label="The same README excerpt split two ways: the fixed token window cuts a code comment and an emoji heading; text-chipper keeps the code block whole and the heading intact">
   <style>
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; white-space: pre; fill: #24292f; }
     .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
     .h { font-size: 18px; font-weight: 700; fill: #24292f; }
     .sub { font-size: 12.5px; fill: #57606a; }
-    .lbl { font-size: 11.5px; fill: #57606a; font-weight: 600; }
+    .colh { font-size: 14px; font-weight: 700; fill: #24292f; }
+    .lbl { font-size: 11.5px; fill: #57606a; }
     .bad { fill: #cf222e; font-weight: 700; }
     .good { fill: #1a7f37; font-weight: 700; }
-    .ctx { fill: #0969da; }
     .note { font-size: 11.5px; fill: #57606a; }
   </style>
 
-  <rect x="0" y="0" width="1230" height="660" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+  <rect x="0" y="0" width="1230" height="540" rx="12" fill="#ffffff" stroke="#d0d7de"/>
 
-  <!-- LEFT: fixed token window -->
-  <text class="sans h" x="30" y="42">Fixed token window, 256 tokens</text>
-  <text class="sans sub" x="30" y="62">Cuts wherever the budget ends: 27 chunks, 2 split a code fence, 2 contain U+FFFD</text>
+  <text class="sans h" x="30" y="42">The same README excerpt, split by each method</text>
+  <text class="sans sub" x="30" y="62">Budget 256 tokens, cl100k_base, no overlap. Lines are shortened; every line shown is verbatim.</text>
 
-  <rect x="30" y="80" width="570" height="160" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
-  <text class="sans lbl" x="46" y="100">chunk 2 · 256 tokens</text>
-  <text class="mono" x="46" y="124">⋯</text>
-  <text class="mono" x="46" y="142">    print(chunk.token_count, chunk.headers)</text>
-  <text class="mono" x="46" y="160">    print(chunk.contextualized_text)  # "[ctx:Install &gt; From source</text>
+  <text class="sans colh" x="30" y="90">Fixed token window: 27 chunks, 2 split a code fence, 2 contain U+FFFD</text>
+  <text class="sans colh" x="630" y="90">text-chipper (default): 41 chunks, 0 split, 0 contain U+FFFD</text>
 
-  <line x1="30" y1="258" x2="600" y2="258" stroke="#cf222e" stroke-width="2" stroke-dasharray="7 5"/>
-  <text class="sans" x="315" y="263" text-anchor="middle" font-size="13" fill="#cf222e" font-weight="700" stroke="#ffffff" stroke-width="8" style="paint-order:stroke">✂  cut here</text>
+  <!-- LEFT backgrounds: window chunk 2 (rows 1-6), chunk 3 (rows 7-14), chunk 4 (rows 15-16) -->
+  <rect x="30" y="100" width="570" height="118" fill="#f6f8fa"/>
+  <rect x="30" y="218" width="570" height="152" fill="#eef4ff"/>
+  <rect x="30" y="370" width="570" height="38" fill="#f6f8fa"/>
 
-  <rect x="30" y="276" width="570" height="150" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
-  <text class="sans lbl" x="46" y="296">chunk 3 · 256 tokens</text>
-  <text class="mono bad" x="46" y="318">] ..." + text</text>
-  <text class="mono" x="46" y="336">```</text>
-  <text class="mono" x="46" y="354">### Why not just split every N tokens?</text>
-  <text class="mono" x="46" y="372">⋯</text>
-  <text class="mono bad" x="46" y="390">## �</text>
+  <!-- RIGHT backgrounds: text-chipper chunk 3 (rows 1-10), chunk 4 (rows 11-13), chunk 5 (rows 14-15) -->
+  <rect x="630" y="100" width="570" height="194" fill="#f0fff4"/>
+  <rect x="630" y="294" width="570" height="57" fill="#f6f8fa"/>
+  <rect x="630" y="351" width="570" height="57" fill="#fff8e6"/>
 
-  <line x1="30" y1="434" x2="600" y2="434" stroke="#cf222e" stroke-width="2" stroke-dasharray="7 5"/>
-  <text class="sans" x="315" y="439" text-anchor="middle" font-size="13" fill="#cf222e" font-weight="700" stroke="#ffffff" stroke-width="8" style="paint-order:stroke">✂  cut here</text>
+  <!-- LEFT text: what the window actually delivers -->
+  <text class="mono" x="46" y="117">```python</text>
+  <text class="mono" x="46" y="136">from text_chipper import TextChipper</text>
+  <text class="mono" x="46" y="155">chipper = TextChipper(max_length=512, overlap=50, encoding="cl100k_base")</text>
+  <text class="mono" x="46" y="174">for chunk in chipper.chunk(open("README.md", encoding="utf-8").read()):</text>
+  <text class="mono" x="46" y="193">    print(chunk.token_count, chunk.headers)</text>
+  <text class="mono" x="46" y="212">    print(chunk.contextualized_text)  # "[ctx:Install &gt; From source</text>
+  <text class="mono bad" x="46" y="231">] ..." + text</text>
+  <text class="mono" x="46" y="250">```</text>
+  <text class="mono" x="46" y="269">### Why not just split every N tokens?</text>
+  <text class="mono" x="46" y="288">A plain token window cuts wherever the budget ends.</text>
+  <text class="mono" x="46" y="307">Reproduce it with examples/before_after.py.</text>
+  <text class="mono" x="46" y="326">Other entry points: chunk_batch(texts), from_file(path), …</text>
+  <text class="mono" x="46" y="345">---</text>
+  <text class="mono bad" x="46" y="364">## �</text>
+  <text class="mono bad" x="46" y="383">��️ Scope &amp; Installation</text>
+  <text class="mono" x="46" y="402">### Scope</text>
 
-  <rect x="30" y="452" width="570" height="112" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
-  <text class="sans lbl" x="46" y="472">chunk 4 · 255 tokens</text>
-  <text class="mono bad" x="46" y="494">��️ Scope &amp; Installation</text>
-  <text class="mono" x="46" y="512">### Scope</text>
-  <text class="mono" x="46" y="530">⋯</text>
+  <!-- RIGHT text: text-chipper's delivered chunks -->
+  <text class="mono" x="646" y="117">```python</text>
+  <text class="mono" x="646" y="136">from text_chipper import TextChipper</text>
+  <text class="mono" x="646" y="155">chipper = TextChipper(max_length=512, overlap=50, encoding="cl100k_base")</text>
+  <text class="mono" x="646" y="174">for chunk in chipper.chunk(open("README.md", encoding="utf-8").read()):</text>
+  <text class="mono" x="646" y="193">    print(chunk.token_count, chunk.headers)</text>
+  <text class="mono" x="646" y="212">    print(chunk.contextualized_text)</text>
+  <text class="mono" x="646" y="231">```</text>
+  <text class="mono" x="646" y="250">### Why not just split every N tokens?</text>
+  <text class="mono" x="646" y="269">A plain token window cuts wherever the budget ends.</text>
+  <text class="mono" x="646" y="288">Reproduce it with examples/before_after.py.</text>
+  <text class="mono" x="646" y="307">Other entry points: chunk_batch(texts), from_file(path), …</text>
+  <text class="mono" x="646" y="326">---</text>
+  <text class="mono" x="646" y="345">## 🛠️ Scope &amp; Installation</text>
+  <text class="mono" x="646" y="364">### Scope</text>
+  <text class="mono" x="646" y="383">| Supported | Not supported |</text>
 
-  <rect x="30" y="584" width="570" height="40" rx="8" fill="#ffebe9" stroke="#ff8182"/>
-  <text class="sans bad" x="46" y="609" font-size="14">✗  Quick Start example split · emoji heading split</text>
+  <!-- LEFT cut markers (red, dashed) -->
+  <line x1="30" y1="218" x2="600" y2="218" stroke="#cf222e" stroke-width="2" stroke-dasharray="7 5"/>
+  <text class="sans bad" x="590" y="232" text-anchor="end" font-size="11">✂ cut inside a code comment (chunk 2 | chunk 3)</text>
+  <line x1="30" y1="370" x2="600" y2="370" stroke="#cf222e" stroke-width="2" stroke-dasharray="7 5"/>
+  <text class="sans bad" x="590" y="366" text-anchor="end" font-size="11">✂ cut inside an emoji (chunk 3 | chunk 4)</text>
 
-  <!-- RIGHT: text-chipper -->
-  <text class="sans h" x="630" y="42">text-chipper (default), 256 tokens</text>
-  <text class="sans sub" x="630" y="62">Splits at structure and re-counts every chunk: 41 chunks, 0 split, 0 contain U+FFFD</text>
+  <!-- RIGHT chunk ends (green, solid) -->
+  <line x1="630" y1="294" x2="1200" y2="294" stroke="#1a7f37" stroke-width="2"/>
+  <text class="sans good" x="1190" y="290" text-anchor="end" font-size="11">chunk 3 ends</text>
+  <line x1="630" y1="351" x2="1200" y2="351" stroke="#1a7f37" stroke-width="2"/>
+  <text class="sans good" x="1190" y="347" text-anchor="end" font-size="11">chunk 4 ends</text>
 
-  <rect x="630" y="80" width="570" height="240" rx="8" fill="#f0fff4" stroke="#4ac26b" stroke-width="1.5"/>
-  <text class="sans lbl" x="646" y="100">chunk 3 · 223 tokens · headers: text_chipper &gt; ⚡ Quick Start</text>
-  <text class="mono ctx" x="646" y="124">[ctx:text_chipper &gt; ⚡ Quick Start] ```python</text>
-  <text class="mono" x="646" y="142">from text_chipper import TextChipper</text>
-  <text class="mono" x="646" y="160">chipper = TextChipper(max_length=512, overlap=50, encoding="cl100k_base")</text>
-  <text class="mono" x="646" y="178">for chunk in chipper.chunk(open("README.md", encoding="utf-8").read()):</text>
-  <text class="mono" x="646" y="196">    print(chunk.token_count, chunk.headers)</text>
-  <text class="mono" x="646" y="214">    print(chunk.contextualized_text)</text>
-  <text class="mono" x="646" y="232">```</text>
-  <text class="mono" x="646" y="300">⋯</text>
+  <!-- Legend -->
+  <text class="sans lbl" x="30" y="432">chunk 2 · 256 tokens   chunk 3 · 256 tokens   chunk 4 · 255 tokens</text>
+  <text class="sans lbl" x="630" y="432">chunk 3 · 223 tokens · headers: text_chipper &gt; ⚡ Quick Start</text>
+  <text class="sans lbl" x="630" y="450">chunk 4 · 150 tokens · headers: text_chipper</text>
+  <text class="sans lbl" x="630" y="468">chunk 5 · 212 tokens · headers: text_chipper &gt; 🛠️ Scope &amp; Installation</text>
 
-  <rect x="630" y="340" width="570" height="120" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
-  <text class="sans lbl" x="646" y="360">chunk 5 · 212 tokens · headers: text_chipper &gt; 🛠️ Scope &amp; Installation</text>
-  <text class="mono ctx" x="646" y="384">[ctx:text_chipper &gt; 🛠️ Scope &amp; Installation] ### Scope</text>
-  <text class="mono" x="646" y="402">| Supported | Not supported |</text>
-  <text class="mono" x="646" y="420">| --- | --- |</text>
-  <text class="mono" x="646" y="438">⋯</text>
+  <rect x="30" y="482" width="570" height="36" rx="8" fill="#ffebe9" stroke="#ff8182"/>
+  <text class="sans bad" x="46" y="505" font-size="14">✗  Code comment and emoji heading both cut</text>
 
-  <rect x="630" y="584" width="570" height="40" rx="8" fill="#dafbe1" stroke="#4ac26b"/>
-  <text class="sans good" x="646" y="609" font-size="14">✓  Quick Start block whole · emoji heading kept in headers</text>
+  <rect x="630" y="482" width="570" height="36" rx="8" fill="#dafbe1" stroke="#4ac26b"/>
+  <text class="sans good" x="646" y="505" font-size="14">✓  No cut inside code or emoji; heading kept whole</text>
 
-  <text class="note" x="30" y="642">Excerpts from the text-chipper README, shortened. ⋯ marks omitted lines. Fixed token window = tiktoken with cl100k_base, no overlap.</text>
+  <text class="note" x="30" y="530">Red dashed lines: where the fixed token window cuts. Green lines: where text-chipper ends a chunk. Excerpt from the README; the "Other entry points" line is shortened after from_file(path).</text>
 </svg>
