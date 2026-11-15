@@ -53,7 +53,7 @@
   <text class="mono" x="646" y="155">chipper = TextChipper(max_length=512, overlap=50, encoding="cl100k_base")</text>
   <text class="mono" x="646" y="174">for chunk in chipper.chunk(open("README.md", encoding="utf-8").read()):</text>
   <text class="mono" x="646" y="193">    print(chunk.token_count, chunk.headers)</text>
-  <text class="mono" x="646" y="212">    print(chunk.contextualized_text)</text>
+  <text class="mono" x="646" y="212">    print(chunk.contextualized_text)  # "[ctx:Install &gt; From source] ..." + text</text>
   <text class="mono" x="646" y="231">```</text>
   <text class="mono" x="646" y="250">### Why not just split every N tokens?</text>
   <text class="mono" x="646" y="269">A plain token window cuts wherever the budget ends.</text>
