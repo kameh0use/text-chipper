@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 200" width="900" height="200" role="img" aria-label="In strict mode, a delivered chunk of 254 tokens fits the 256-token budget; the heading label counts toward the budget">
+  <style>
+    .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .h { font-size: 16px; font-weight: 700; fill: #24292f; }
+    .lbl { font-size: 13px; fill: #57606a; }
+    .val { font-size: 13px; font-weight: 700; fill: #24292f; }
+    .note { font-size: 12px; fill: #57606a; }
+  </style>
+
+  <rect x="0" y="0" width="900" height="200" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+
+  <text class="sans h" x="30" y="36">Strict mode: the delivered chunk must fit the budget</text>
+
+  <text class="sans lbl" x="30" y="72">chunk 2 (delivered text, heading label included)</text>
+  <text class="sans val" x="840" y="72" text-anchor="end">254 tokens</text>
+
+  <!-- budget bar: 256 tokens across 840 px -->
+  <rect x="30" y="84" width="840" height="34" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="30" y="84" width="827" height="34" rx="6" fill="#4ac26b"/>
+  <line x1="870" y1="74" x2="870" y2="126" stroke="#24292f" stroke-width="2"/>
+  <text class="sans lbl" x="870" y="140" text-anchor="middle">limit 256</text>
+
+  <text class="sans note" x="30" y="170">token_count ≤ max_length, counted on the text the chunk actually delivers. The [ctx:…] heading label is part of that text.</text>
+</svg>

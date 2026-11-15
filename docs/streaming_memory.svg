@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 230" width="900" height="230" role="img" aria-label="Memory growth on a 514 MiB file: from_file_stream 71 MB, reading into one string then chunk 4.6 GB">
+  <style>
+    .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .h { font-size: 16px; font-weight: 700; fill: #24292f; }
+    .lbl { font-size: 13px; fill: #57606a; }
+    .val { font-size: 13px; font-weight: 700; fill: #24292f; }
+    .note { font-size: 12px; fill: #57606a; }
+  </style>
+
+  <rect x="0" y="0" width="900" height="230" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+
+  <text class="sans h" x="30" y="36">Memory growth on a 514 MiB file, single core</text>
+
+  <text class="sans lbl" x="30" y="78">from_file_stream()</text>
+  <text class="sans val" x="870" y="78" text-anchor="end">71 MB</text>
+  <rect x="30" y="86" width="840" height="24" rx="4" fill="#f6f8fa"/>
+  <rect x="30" y="86" width="13" height="24" rx="4" fill="#1a7f37"/>
+
+  <text class="sans lbl" x="30" y="148">read the file into one string, then chunk()</text>
+  <text class="sans val" x="870" y="148" text-anchor="end">4.6 GB</text>
+  <rect x="30" y="156" width="840" height="24" rx="4" fill="#f6f8fa"/>
+  <rect x="30" y="156" width="840" height="24" rx="4" fill="#cf222e"/>
+
+  <text class="sans note" x="30" y="210">Growth of the process's peak memory after warm-up. Same output: identical SHA-256 of the delivered chunk text.</text>
+</svg>
