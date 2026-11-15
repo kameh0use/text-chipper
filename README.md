@@ -115,14 +115,7 @@ not measured. How to reproduce: [`benchmarks/README.md`](benchmarks/README.md#in
 
 ## 📖 Chunking modes
 
-| Mode | How to call | Markdown and headers | Memory | Speed | Use it for |
-| --- | --- | --- | --- | --- | --- |
-| Default, whole string | `chunk(text)` | Yes | Whole text in memory; 4.6 GB growth on the 514 MiB file | 34.0 MiB/s (geometric mean, small files) | Ingesting one Markdown page at a time in a web app or API, such as a docs page saved from a CMS |
-| Default, streaming | `from_file_stream(path)` | Yes | Bounded; 71 MB growth on the 514 MiB file | 21.3 MiB/s (514 MiB file) | Nightly re-indexing of a multi-GB Markdown knowledge-base export on a small worker with a fixed memory limit |
-| Default, 8 MiB blocks (benchmark setup) | `chunk()` on each block | Yes, per block | 130 MB growth on the 514 MiB file | 18.0 MiB/s (514 MiB file) | Not recommended; used in the benchmark to feed string-only libraries |
-| Flat | `TextChipper(include_context=False)` | No; `headers` always empty | Whole file in memory; 32 MiB limit | 23.0 MiB/s (geometric mean, small files) | Exported call-center or chat transcripts as plain text, where overlapping windows suit retrieval |
-
-The speed column is not one scale: the first and last rows are geometric means over the small benchmark files, the middle two are one 514 MiB file on one core.
+![Four text-chipper modes compared by how to call them, Markdown handling, memory, speed and use case](docs/modes.svg)
 
 ### `include_context=True` (default): Markdown-aware
 
