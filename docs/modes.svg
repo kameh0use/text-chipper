@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1230 500" width="1230" height="500" role="img" aria-label="Four text-chipper modes compared: default whole string, default streaming, default 8 MiB blocks (benchmark only), and flat mode, by how to call them, Markdown handling, memory, speed and use case">
+  <style>
+    .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; fill: #24292f; }
+    .h { font-size: 18px; font-weight: 700; fill: #24292f; }
+    .sub { font-size: 12.5px; fill: #57606a; }
+    .th { font-size: 13px; font-weight: 700; fill: #24292f; }
+    .td { font-size: 13px; fill: #24292f; }
+    .tdb { font-size: 13px; font-weight: 700; fill: #24292f; }
+    .tdg { font-size: 12px; fill: #57606a; }
+    .note { font-size: 12px; fill: #57606a; }
+  </style>
+
+  <rect x="0" y="0" width="1230" height="500" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+
+  <text class="sans h" x="30" y="42">Four ways to call text-chipper</text>
+  <text class="sans sub" x="30" y="62">Same library, different input and memory behaviour. Pick by where your text comes from.</text>
+
+  <!-- header row -->
+  <rect x="30" y="80" width="1170" height="34" fill="#f6f8fa"/>
+  <text class="sans th" x="40" y="102">Mode</text>
+  <text class="sans th" x="210" y="102">How to call</text>
+  <text class="sans th" x="410" y="102">Markdown, headers</text>
+  <text class="sans th" x="550" y="102">Memory</text>
+  <text class="sans th" x="780" y="102">Speed</text>
+  <text class="sans th" x="950" y="102">Use it for</text>
+
+  <!-- row 1: default, whole string -->
+  <line x1="30" y1="114" x2="1200" y2="114" stroke="#d0d7de"/>
+  <text class="sans tdb" x="40" y="136">Default,</text>
+  <text class="sans tdb" x="40" y="153">whole string</text>
+  <text class="mono" x="210" y="142">chunk(text)</text>
+  <text class="sans td" x="410" y="142">Yes</text>
+  <text class="sans td" x="550" y="136">Whole text in memory;</text>
+  <text class="sans td" x="550" y="153">4.6 GB growth (514 MiB)</text>
+  <text class="sans tdb" x="780" y="136">34.0 MiB/s</text>
+  <text class="sans tdg" x="780" y="153">geometric mean, small files</text>
+  <text class="sans td" x="950" y="136">Ingesting one Markdown page</text>
+  <text class="sans td" x="950" y="153">at a time in a web app or API,</text>
+  <text class="sans td" x="950" y="170">e.g. a page from a CMS</text>
+
+  <!-- row 2: default, streaming -->
+  <line x1="30" y1="184" x2="1200" y2="184" stroke="#d0d7de"/>
+  <text class="sans tdb" x="40" y="206">Default,</text>
+  <text class="sans tdb" x="40" y="223">streaming</text>
+  <text class="mono" x="210" y="212">from_file_stream(path)</text>
+  <text class="sans td" x="410" y="212">Yes</text>
+  <text class="sans td" x="550" y="206">Bounded;</text>
+  <text class="sans td" x="550" y="223">71 MB growth (514 MiB)</text>
+  <text class="sans tdb" x="780" y="206">21.3 MiB/s</text>
+  <text class="sans tdg" x="780" y="223">514 MiB file, one core</text>
+  <text class="sans td" x="950" y="206">Nightly re-indexing of a</text>
+  <text class="sans td" x="950" y="223">multi-GB Markdown export on</text>
+  <text class="sans td" x="950" y="240">a small worker with a fixed</text>
+  <text class="sans td" x="950" y="257">memory limit</text>
+
+  <!-- row 3: default, 8 MiB blocks -->
+  <line x1="30" y1="274" x2="1200" y2="274" stroke="#d0d7de"/>
+  <text class="sans tdb" x="40" y="296">Default, 8 MiB</text>
+  <text class="sans tdb" x="40" y="313">blocks (benchmark)</text>
+  <text class="mono" x="210" y="302">chunk() per block</text>
+  <text class="sans td" x="410" y="302">Yes, per block</text>
+  <text class="sans td" x="550" y="296">130 MB growth</text>
+  <text class="sans td" x="550" y="313">(514 MiB file)</text>
+  <text class="sans tdb" x="780" y="296">18.0 MiB/s</text>
+  <text class="sans tdg" x="780" y="313">514 MiB file, one core</text>
+  <text class="sans td" x="950" y="296">Not recommended; used in</text>
+  <text class="sans td" x="950" y="313">the benchmark to feed</text>
+  <text class="sans td" x="950" y="330">string-only libraries</text>
+
+  <!-- row 4: flat -->
+  <line x1="30" y1="344" x2="1200" y2="344" stroke="#d0d7de"/>
+  <text class="sans tdb" x="40" y="366">Flat</text>
+  <text class="mono" x="210" y="366">TextChipper(</text>
+  <text class="mono" x="210" y="381">include_context=False)</text>
+  <text class="sans td" x="410" y="366">No; headers</text>
+  <text class="sans td" x="410" y="383">always empty</text>
+  <text class="sans td" x="550" y="366">Whole file in memory;</text>
+  <text class="sans td" x="550" y="383">32 MiB limit</text>
+  <text class="sans tdb" x="780" y="366">23.0 MiB/s</text>
+  <text class="sans tdg" x="780" y="383">geometric mean, small files</text>
+  <text class="sans td" x="950" y="366">Exported call-center or chat</text>
+  <text class="sans td" x="950" y="383">transcripts as plain text, where</text>
+  <text class="sans td" x="950" y="400">overlapping windows suit retrieval</text>
+
+  <line x1="30" y1="414" x2="1200" y2="414" stroke="#d0d7de"/>
+
+  <text class="note" x="30" y="440">Speed is not one scale. Default whole-string and flat rows are geometric means over the small benchmark files;</text>
+  <text class="note" x="30" y="458">the streaming and blocks rows are one 514 MiB file on one core. Memory growth is measured after warm-up.</text>
+</svg>
