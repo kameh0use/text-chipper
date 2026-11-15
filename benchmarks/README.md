@@ -1,6 +1,6 @@
 # Benchmarks
 
-Two benchmarks live here. Both compare text_chipper with the same libraries (chonkie, langchain-text-splitters,
+Two benchmarks live here, plus two smaller checks below (replacement characters and a real README). Both compare text_chipper with the same libraries (chonkie, langchain-text-splitters,
 semchunk, semantic-text-splitter and a plain tiktoken token window), configured by the same adapters in
 [`chunkbench/adapters.py`](chunkbench/adapters.py), at 512 tokens with `cl100k_base`.
 
@@ -82,6 +82,36 @@ All-cores lane:
 ![Throughput on a 514 MiB file, all-cores lane](charts/streaming_speed_all.png)
 
 ![Memory growth on a 514 MiB file, all-cores lane](charts/streaming_memory_all.png)
+
+## Replacement characters (U+FFFD)
+
+[`cjk_loss_check.py`](cjk_loss_check.py) counts chunks that contain U+FFFD and the characters that actually disappear.
+`loss_report(source, chunks)` removes U+FFFD from the joined chunks and compares the remaining non-whitespace characters
+with the source.
+
+- The check is valid for splitters whose chunks are non-overlapping and contain the source text. It is **not** valid for
+  text_chipper's default mode, because headings are returned in `headers` and are not in the chunk body.
+- The main README's coverage metric is stricter than this. A chunk that contains U+FFFD cannot be matched verbatim, so the
+  whole chunk leaves coverage. That is why coverage reports 32.6 % loss for the CJK workload while far fewer characters
+  disappear.
+- Bound: a cut point can destroy at most one character, so the characters lost are at most the number of damaged chunks.
+
+| Input | Splitter | Chunks with U+FFFD | Characters lost |
+| --- | --- | ---: | ---: |
+| CJK workload of the main harness | tiktoken window | 245 of 751 | at most 245 (under 0.1 %), upper bound, not measured |
+| Synthetic CJK file, about 1.7 M characters | tiktoken window | 546 of 2,833 | 286 (0.017 %) |
+| Same synthetic file | text_chipper flat mode | 0 | 0 |
+
+## Before and after on a real README
+
+[`before_after_readme.py`](before_after_readme.py) chunks one Markdown file with a fixed token window and with text_chipper
+(default mode), then writes both outputs to a report and counts chunks that split a code fence or contain U+FFFD.
+
+```bash
+python benchmarks/before_after_readme.py README.md --max-tokens 256 --out report.md
+```
+
+- Fence detection checks the chunk body. A chunk that lies entirely inside a code block, with no fence marker, is not flagged.
 
 ## Install footprint
 

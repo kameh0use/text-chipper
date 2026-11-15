@@ -50,6 +50,10 @@ mean a code block split in the middle of a line. Same input, same budget
 
 Reproduce it with [`examples/before_after.py`](examples/before_after.py).
 
+The same comparison on a real README excerpt: the fixed token window on the left, text-chipper on the right. [`benchmarks/before_after_readme.py`](benchmarks/before_after_readme.py) runs it on any Markdown file.
+
+![The same README excerpt split two ways: the fixed token window cuts a code comment and an emoji heading; text-chipper keeps both whole](docs/readme_before_after.svg)
+
 
 Other entry points: `chunk_batch(texts)`, `from_file(path)`, `from_files(paths)`,
 `from_file_stream(path)` (an iterator), `count_tokens(text)`.
