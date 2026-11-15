@@ -39,49 +39,49 @@
   <text class="sans td" x="950" y="153">at a time in a web app or API,</text>
   <text class="sans td" x="950" y="170">e.g. a page from a CMS</text>
 
-  <!-- row 2: default, streaming -->
+  <!-- row 2: flat -->
   <line x1="30" y1="184" x2="1200" y2="184" stroke="#d0d7de"/>
-  <text class="sans tdb" x="40" y="206">Default,</text>
-  <text class="sans tdb" x="40" y="223">streaming</text>
-  <text class="mono" x="210" y="212">from_file_stream(path)</text>
-  <text class="sans td" x="410" y="212">Yes</text>
-  <text class="sans td" x="550" y="206">Bounded;</text>
-  <text class="sans td" x="550" y="223">71 MB growth (514 MiB)</text>
-  <text class="sans tdb" x="780" y="206">21.3 MiB/s</text>
-  <text class="sans tdg" x="780" y="223">514 MiB file, one core</text>
-  <text class="sans td" x="950" y="206">Nightly re-indexing of a</text>
-  <text class="sans td" x="950" y="223">multi-GB Markdown export on</text>
-  <text class="sans td" x="950" y="240">a small worker with a fixed</text>
-  <text class="sans td" x="950" y="257">memory limit</text>
+  <text class="sans tdb" x="40" y="206">Flat</text>
+  <text class="mono" x="210" y="206">TextChipper(</text>
+  <text class="mono" x="210" y="221">include_context=False)</text>
+  <text class="sans td" x="410" y="206">No; headers</text>
+  <text class="sans td" x="410" y="223">always empty</text>
+  <text class="sans td" x="550" y="206">Whole file in memory;</text>
+  <text class="sans td" x="550" y="223">32 MiB limit</text>
+  <text class="sans tdb" x="780" y="206">23.0 MiB/s</text>
+  <text class="sans tdg" x="780" y="223">geometric mean, small files</text>
+  <text class="sans td" x="950" y="206">Exported call-center or chat</text>
+  <text class="sans td" x="950" y="223">transcripts as plain text, where</text>
+  <text class="sans td" x="950" y="240">overlapping windows suit retrieval</text>
 
-  <!-- row 3: default, 8 MiB blocks -->
-  <line x1="30" y1="274" x2="1200" y2="274" stroke="#d0d7de"/>
-  <text class="sans tdb" x="40" y="296">Default, 8 MiB</text>
-  <text class="sans tdb" x="40" y="313">blocks (benchmark)</text>
-  <text class="mono" x="210" y="302">chunk() per block</text>
-  <text class="sans td" x="410" y="302">Yes, per block</text>
-  <text class="sans td" x="550" y="296">130 MB growth</text>
-  <text class="sans td" x="550" y="313">(514 MiB file)</text>
-  <text class="sans tdb" x="780" y="296">18.0 MiB/s</text>
-  <text class="sans tdg" x="780" y="313">514 MiB file, one core</text>
-  <text class="sans td" x="950" y="296">Not recommended; used in</text>
-  <text class="sans td" x="950" y="313">the benchmark to feed</text>
-  <text class="sans td" x="950" y="330">string-only libraries</text>
+  <!-- row 3: default, streaming -->
+  <line x1="30" y1="254" x2="1200" y2="254" stroke="#d0d7de"/>
+  <text class="sans tdb" x="40" y="276">Default,</text>
+  <text class="sans tdb" x="40" y="293">streaming</text>
+  <text class="mono" x="210" y="282">from_file_stream(path)</text>
+  <text class="sans td" x="410" y="282">Yes</text>
+  <text class="sans td" x="550" y="276">Bounded;</text>
+  <text class="sans td" x="550" y="293">71 MB growth (514 MiB)</text>
+  <text class="sans tdb" x="780" y="276">21.3 MiB/s</text>
+  <text class="sans tdg" x="780" y="293">514 MiB file, one core</text>
+  <text class="sans td" x="950" y="276">Nightly re-indexing of a</text>
+  <text class="sans td" x="950" y="293">multi-GB Markdown export on</text>
+  <text class="sans td" x="950" y="310">a small worker with a fixed</text>
+  <text class="sans td" x="950" y="327">memory limit</text>
 
-  <!-- row 4: flat -->
+  <!-- row 4: default, 8 MiB blocks -->
   <line x1="30" y1="344" x2="1200" y2="344" stroke="#d0d7de"/>
-  <text class="sans tdb" x="40" y="366">Flat</text>
-  <text class="mono" x="210" y="366">TextChipper(</text>
-  <text class="mono" x="210" y="381">include_context=False)</text>
-  <text class="sans td" x="410" y="366">No; headers</text>
-  <text class="sans td" x="410" y="383">always empty</text>
-  <text class="sans td" x="550" y="366">Whole file in memory;</text>
-  <text class="sans td" x="550" y="383">32 MiB limit</text>
-  <text class="sans tdb" x="780" y="366">23.0 MiB/s</text>
-  <text class="sans tdg" x="780" y="383">geometric mean, small files</text>
-  <text class="sans td" x="950" y="366">Exported call-center or chat</text>
-  <text class="sans td" x="950" y="383">transcripts as plain text, where</text>
-  <text class="sans td" x="950" y="400">overlapping windows suit retrieval</text>
+  <text class="sans tdb" x="40" y="366">Default, 8 MiB</text>
+  <text class="sans tdb" x="40" y="383">blocks (benchmark)</text>
+  <text class="mono" x="210" y="372">chunk() per block</text>
+  <text class="sans td" x="410" y="372">Yes, per block</text>
+  <text class="sans td" x="550" y="366">130 MB growth</text>
+  <text class="sans td" x="550" y="383">(514 MiB file)</text>
+  <text class="sans tdb" x="780" y="366">18.0 MiB/s</text>
+  <text class="sans tdg" x="780" y="383">514 MiB file, one core</text>
+  <text class="sans td" x="950" y="366">Not recommended; used in</text>
+  <text class="sans td" x="950" y="383">the benchmark to feed</text>
+  <text class="sans td" x="950" y="400">string-only libraries</text>
 
   <line x1="30" y1="414" x2="1200" y2="414" stroke="#d0d7de"/>
 
