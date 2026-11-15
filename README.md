@@ -3,7 +3,7 @@
 [![Rust Version](https://img.shields.io/badge/rust-1.88.0-orange.svg)](https://www.rust-lang.org/)
 [![Python](https://img.shields.io/badge/python-%E2%89%A53.9-blue.svg)](https://www.python.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/kameh0use/text-chipper)
+[![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](https://github.com/kameh0use/text-chipper)
 
 High-performance, Markdown-aware, strictly budget-enforced text chunking for RAG and LLM pipelines.
 Built in Rust with Python bindings. 
