@@ -1,12 +1,9 @@
-docs(benchmarks): refresh results and clarify coverage
+docs(benchmarks): refresh results, charts, and coverage reporting
 
 Refresh the benchmark documentation and charts with the 17 November 2026 results.
-The main run reports 37.1 MiB/s geometric-mean throughput in the single-core lane.
-The 514.3 MiB streaming run reports 20.5 MiB/s with 56 MB peak-memory growth.
-
 Clarify the difference between exact body coverage and content coverage that also
 recognizes Markdown heading titles carried in chunk metadata. Update benchmark
-reports and chart labels, and make the streaming plotter handle result files that
-contain only one execution lane.
+reports and chart labels, and make the streaming chart generator handle result
+files that contain only one execution lane.
 
 No runtime behavior or Rust/Python API changes are included.
