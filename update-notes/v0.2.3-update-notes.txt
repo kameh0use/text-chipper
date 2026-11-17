@@ -1,0 +1,27 @@
+perf(split_engine): speed up windowing of unbroken text (CJK) ~1.85x
+
+Text with no paragraph/line/sentence/word boundary (e.g. unpunctuated CJK)
+falls through to windows(), where the tokenizer is used as an oracle to find
+each cut. That path paid for several redundant BPE passes per window:
+
+- merge() recounted every single-window chunk although settle() had already
+  counted the exact same string. Atom now carries the settled trimmed range
+  (`exact`) and merge reuses the count when the ranges match.
+- max_fit() bisected as soon as a probe overshot. It now interpolates between
+  the two measured (bytes, tokens) points, falling back to bisection after
+  6 iterations.
+- max_fit() accepted a tolerance of budget/32 even when snap_end() can never
+  recover the slack (range made only of word characters). Tolerance is now 0
+  there.
+- With tolerance enabled, the first guess aims at budget - tol/4 instead of
+  the upper edge of the accepted band, so more windows pass on the first probe.
+
+Measured on Apple M5 (stress_cjk_unbroken, 1 MiB, cl100k_base, 512 tokens,
+3 rounds, before/after on the same machine):
+  text_chipper  14.4 -> 26.6 MiB/s  (1.85x)
+  flat          11.6 -> 18.5 MiB/s  (1.59x)
+  tokenizer input: 2.46x -> 1.58x of the input bytes, candidate recount gone
+  chunks 772 -> 774 (+0.26 %)
+All other workloads are unchanged (0.98-1.02x, identical chunk counts).
+Cut positions in windowed text may shift by a few characters; every delivered
+chunk still fits the budget (exact count, or the exact count from settle()).

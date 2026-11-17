@@ -470,6 +470,10 @@ struct Atom {
     end: usize,
     tokens: usize,
     rank: u8,
+    /// `Some((s, e))` when `tokens` is the exact count of the trimmed text `t[s..e]`
+    /// (set by `windows_rel`, which already settled that string). `merge` can then skip
+    /// recounting a chunk made of this single atom.
+    exact: Option<(usize, usize)>,
 }
 
 /// Cut points (strictly inside (a, b)) for one separator level.
@@ -586,18 +590,19 @@ impl<'a> Splitter<'a> {
 
     /// Largest `end` such that count(text[start..end]) <= budget.
     /// Uses proportional guesses to bracket, then bisection. Always returns end > start.
-    fn max_fit(&mut self, start: usize) -> (usize, usize) {
+    fn max_fit(&mut self, start: usize, snap_tol: bool) -> (usize, usize) {
         let t = self.text;
         let n = t.len();
         let budget = self.budget;
         let mut lo = start;
         let mut lo_c = 0usize;
         let mut hi: Option<usize> = None;
+        let mut hi_c = 0usize;
 
         // Tolerance: with snapping the tail gets pulled back to a boundary anyway, so an exact
         // byte-level fit is wasted work. Each probe re-encodes a whole window, so fewer is faster.
-        let tol_tokens = if self.snap { (budget / 32).max(1) } else { 0 };
-        let tol_bytes = if self.snap {
+        let tol_tokens = if snap_tol { (budget / 32).max(1) } else { 0 };
+        let tol_bytes = if snap_tol {
             ((self.ratio * (budget / 64).max(1) as f64) as usize).max(1)
         } else {
             (self.ratio as usize).max(1)
@@ -612,7 +617,12 @@ impl<'a> Splitter<'a> {
         let cap = budget.saturating_mul(8).max(2048);
         let limit = n.min(start.saturating_add(cap));
 
-        let guess = ((budget as f64) * self.ratio).ceil() as usize;
+        // Aim inside the accepted band [budget - tol_tokens, budget], not at its upper edge:
+        // density noise puts about half of the first guesses above the budget otherwise, and
+        // every miss costs another full-window probe. With zero tolerance `aim == budget`.
+        let aim = budget.saturating_sub(tol_tokens / 4);
+
+        let guess = ((aim as f64) * self.ratio).ceil() as usize;
         let mut cur = self.floor_boundary(start.saturating_add(guess.max(1)).min(limit));
 
         for iter in 0..96 {
@@ -638,6 +648,7 @@ impl<'a> Splitter<'a> {
                 }
             } else {
                 hi = Some(cur);
+                hi_c = c;
             }
             if let Some(h) = hi {
                 if h - lo <= tol_bytes || self.next_boundary(lo) >= h {
@@ -651,7 +662,7 @@ impl<'a> Splitter<'a> {
             } else {
                 self.ratio
             };
-            let rem = budget.saturating_sub(lo_c);
+            let rem = aim.saturating_sub(lo_c);
             let mut g = lo + ((rem as f64) * est) as usize;
             match hi {
                 None => {
@@ -664,6 +675,13 @@ impl<'a> Splitter<'a> {
                     g = g.min(limit);
                 }
                 Some(h) => {
+                    // Both ends are measured: interpolate on (bytes, tokens) instead of
+                    // halving. Token counts are locally near-linear in bytes, so this usually
+                    // lands within a character or two of the answer.
+                    if hi_c > lo_c && iter < 6 {
+                        let frac = aim.saturating_sub(lo_c) as f64 / (hi_c - lo_c) as f64;
+                        g = lo + (((h - lo) as f64) * frac) as usize;
+                    }
                     if g <= lo || g >= h || iter >= 6 {
                         g = lo + (h - lo) / 2;
                     }
@@ -773,6 +791,7 @@ impl<'a> Splitter<'a> {
                         end: b,
                         tokens: c,
                         rank: rank_after,
+                        exact: None,
                     });
                     return;
                 }
@@ -831,8 +850,12 @@ impl<'a> Splitter<'a> {
         let t = self.text;
         let n = t.len();
         let mut start = 0usize;
+        // A tolerance below the budget is only free when `snap_end` can pull the tail back to a
+        // boundary. In a range made only of word characters (unpunctuated CJK, base64 without
+        // symbols...) `inside_word` is true everywhere, so the slack would never be recovered.
+        let snap_tol = self.snap && t.chars().any(|c| !is_wordish(c));
         while start < n {
-            let (end, c) = self.max_fit(start);
+            let (end, c) = self.max_fit(start, snap_tol);
             let mut res = None;
             if end < n && self.snap {
                 let sn = snap_end(t, &self.grapheme_boundaries, start, end);
@@ -863,9 +886,28 @@ impl<'a> Splitter<'a> {
                 end: base + used,
                 tokens: tc,
                 rank: R_CHAR,
+                exact: if _s < _e {
+                    Some((base + _s, base + _e))
+                } else {
+                    None
+                },
             });
             start = used;
         }
+    }
+
+    /// Exact token count of the delivered text `t[s..e]` for the chunk made of atoms `i..cut`.
+    /// A chunk that is one atom whose settled trimmed range is exactly `(s, e)` was already
+    /// counted by `settle`, so the answer is known without another tokenizer pass.
+    fn chunk_tokens(&self, atoms: &[Atom], i: usize, cut: usize, s: usize, e: usize) -> usize {
+        if cut == i + 1 {
+            if let Some((es, ee)) = atoms[i].exact {
+                if es == s && ee == e {
+                    return atoms[i].tokens;
+                }
+            }
+        }
+        self.backend.count_at(&self.text[s..e], CountSite::Candidate)
     }
 
     /// Pack atoms into chunks. With `snap`, a pruned set of structural cut candidates is scored
@@ -991,7 +1033,7 @@ impl<'a> Splitter<'a> {
                     if s >= e {
                         continue;
                     }
-                    let exact_tokens = self.backend.count_at(&t[s..e], CountSite::Candidate);
+                    let exact_tokens = self.chunk_tokens(atoms, i, cut, s, e);
                     if exact_tokens <= budget {
                         selected = Some((cut, s, e, exact_tokens));
                         break;
@@ -1010,7 +1052,7 @@ impl<'a> Splitter<'a> {
                         if s >= e {
                             break;
                         }
-                        let exact_tokens = self.backend.count_at(&t[s..e], CountSite::Candidate);
+                        let exact_tokens = self.chunk_tokens(atoms, i, cut, s, e);
                         if exact_tokens <= budget || cut - i <= 1 || cut <= min_end {
                             emit(out, t, origin, cursor, s, e, exact_tokens, headers);
                             chosen_j = cut;
@@ -1034,7 +1076,7 @@ impl<'a> Splitter<'a> {
                         chosen_j = cut;
                         break;
                     }
-                    let exact_tokens = self.backend.count_at(&t[s..e], CountSite::Candidate);
+                    let exact_tokens = self.chunk_tokens(atoms, i, cut, s, e);
                     if exact_tokens <= budget || cut - i <= 1 || cut <= min_end {
                         emit(out, t, origin, cursor, s, e, exact_tokens, headers);
                         chosen_j = cut;
