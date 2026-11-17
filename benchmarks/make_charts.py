@@ -295,14 +295,11 @@ def chart_speed_per_workload(plt, d: Data, out: Path, svg: bool) -> None:
 
 
 def chart_memory(plt, d: Data, out: Path, svg: bool) -> None:
-    from matplotlib.patches import Patch
-
     stats = {}
     for l in d.libs:
         cs = d.of(l)
         peak = statistics.fmean(c["rss_peak_mb"] for c in cs)
-        base = statistics.fmean(min(c["rss_after_init_mb"], c["rss_peak_mb"]) for c in cs)
-        stats[l] = {"peak": peak, "base": base, "extra": peak - base, "max_extra": max(c["rss_delta_mb"] for c in cs)}
+        stats[l] = {"peak": peak, "max_extra": max(c["rss_delta_mb"] for c in cs)}
     libs = sorted(d.libs, key=lambda l: stats[l]["peak"])
     n = len(libs)
     fig = plt.figure(figsize=(9, 1.25 + 0.46 * n + 1.25))
@@ -310,9 +307,7 @@ def chart_memory(plt, d: Data, out: Path, svg: bool) -> None:
     ys = list(range(n))
     for y, l in zip(ys, libs):
         s = stats[l]
-        ours = l.startswith("text_chipper")
-        ax.barh(y, s["base"], height=0.62, color=BLUE if l == "text_chipper" else (BLUE_SOFT if ours else GREY))
-        ax.barh(y, s["extra"], left=s["base"], height=0.62, color=BLUE_SOFT if ours else GREY_SOFT)
+        ax.barh(y, s["peak"], height=0.62, color=BLUE if l.startswith("text_chipper") else GREY)
     xmax = max(s["peak"] for s in stats.values())
     ax.set_xlim(0, xmax * 1.2)
     ax.set_ylim(n - 0.4, -0.6)
@@ -338,11 +333,8 @@ def chart_memory(plt, d: Data, out: Path, svg: bool) -> None:
                 fontweight="bold" if ours else "normal")
         ax.text(1.05, y, f"+{s['max_extra']:.0f} MB", transform=side, va="center", ha="left", fontsize=9.5, color=INK2,
                 clip_on=False)
-    handles = [Patch(color=GREY, label="after imports and tokenizer load"), Patch(color=GREY_SOFT, label="extra while chunking (mean)")]
-    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, frameon=False, fontsize=8.6,
-              labelcolor=INK2, handlelength=1.1, columnspacing=1.8)
     title_block(fig, "Memory: peak process size",
-                f"Mean over {len(d.workloads)} workloads, interpreter included. Lower is better.")
+                f"Mean over {len(d.workloads)} workloads, interpreter included. Right: largest extra on one workload. Lower is better.")
     foot(fig, footer(d.meta, d.lane))
     save(plt, fig, out, "memory_single_core", svg)
 
@@ -386,7 +378,7 @@ def chart_quality(plt, d: Data, out: Path, svg: bool) -> None:
     columns = [
         ("Chunks within\nthe token limit", col_budget, "worst"),
         ("Words\nnever cut", col_words, "worst"),
-        ("Source text\npreserved", col_text, "worst"),
+        ("Body + heading\nmetadata", col_text, "worst"),
         ("Code fences\nkept whole", col_fences, "worst"),
     ]
     libs, n, ncol = d.libs, len(d.libs), len(columns)
@@ -439,8 +431,8 @@ def chart_quality(plt, d: Data, out: Path, svg: bool) -> None:
     extra = ""
     if footnote_needed:
         tc = next((c for c in d.of("text_chipper") if (c.get("quality") or {}).get("coverage_pct", 100) < 99.99), None)
-        body = f" (body text only: {pct_text(q(tc, 'coverage_pct'), 2)} on {tc['workload']})" if tc else ""
-        extra = ("† Counts heading text that text_chipper returns in each chunk's `headers` instead of the chunk text"
+        body = f"{pct_text(q(tc, 'coverage_pct'), 2)} on {tc['workload']}" if tc else "not available"
+        extra = ("† Score includes heading text carried in `headers`. Body-only coverage: "
                  + body + ".")
     tcw = d.of("text_chipper")
     worst = max(tcw, key=lambda c: q(c, "mid_word_cut_pct") or 0) if tcw else None

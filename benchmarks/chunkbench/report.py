@@ -125,13 +125,15 @@ def write_all(out_dir: Path) -> None:
     cols = speed_cols + [
         ("CPU ms", "cpu_ms_median", 0),
         ("CPU/wall", "cpu_utilization", 2), ("RSS Δ MB", "rss_delta_mb", 0), ("chunks", "chunks", 0),
-        ("max tok", "tokens_max", 0), ("over %", "over_limit_pct", 2), ("body cov %", "coverage_pct", 3), ("content cov %", "content_coverage_pct", 3),
+        ("max tok", "tokens_max", 0), ("over %", "over_limit_pct", 2),
+        ("body coverage %", "coverage_pct", 3), ("content + heading metadata %", "content_coverage_pct", 3),
         ("located %", "located_pct", 1), ("mid-word %", "mid_word_cut_pct", 1), ("clean end %", "clean_end_pct", 1),
         ("fence ok %", "fence_intact_pct", 1), ("orphan h %", "orphan_heading_pct", 1),
         ("IoU", "oracle_iou_mean", 3), ("1-chunk %", "single_chunk_hit_pct", 1),
     ]
     add("## Results per workload\n")
-    add("Columns are defined in `benchmarks/README.md`. `–` means not applicable or not measured. "
+    add("Body coverage counts exact source text found in chunk bodies. Content + heading metadata also counts "
+        "recognized heading text carried in `headers`. `–` means not applicable or not measured. "
         "Failures are listed at the end.\n")
     for wl in workloads:
         for lane in lanes:

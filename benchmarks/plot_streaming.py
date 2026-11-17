@@ -1,9 +1,9 @@
 """Charts for the large-file benchmark (results of streaming_bench.py), in the style of the main charts.
 
-Usage: python benchmarks/plot_streaming.py benchmarks/results/streaming_20261114/*.jsonl [--out benchmarks/charts]
+Usage: python benchmarks/plot_streaming.py benchmarks/results/streaming_<date>/*.jsonl [--out benchmarks/charts]
 
 Timing and memory medians use only the runs WITHOUT --verify (verification builds extra objects).
-Writes streaming_speed_{single,all}.{png,svg} and streaming_memory_{single,all}.{png,svg}.
+Writes speed and memory charts for each lane present in the input files.
 """
 import argparse
 import json
@@ -164,8 +164,11 @@ if __name__ == "__main__":
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     size = next(r["file_mib"] for r in rows if "file_mib" in r)
-    speed_chart(rows, "single", out, size)
-    speed_chart(rows, "all", out, size)
-    memory_chart(rows, "single", out, size)
-    memory_chart(rows, "all", out, size)
+    # A result file may contain only one lane (for example, a single-core rerun).
+    lanes = {row.get("lane") for row in rows}
+    for lane in ("single", "all"):
+        if lane not in lanes:
+            continue
+        speed_chart(rows, lane, out, size)
+        memory_chart(rows, lane, out, size)
     print("wrote charts to", out)

@@ -190,39 +190,39 @@ mode for Markdown documents.
 
 ## 📈 Benchmarks
 
-text_chipper is compared with seven other ways of chunking text on the same inputs: 12 workloads (synthetic
-prose, Markdown and code, real-world texts such as PubMed, finance, Wikipedia and chat logs, and stress
-cases), 512-token chunks, `cl100k_base`, no overlap. All charts below show the **single-core** lane.
+The main benchmark compares text_chipper with seven other chunking approaches on 12 workloads: synthetic
+prose, Markdown and code; real texts such as PubMed, finance, Wikipedia and chat logs; and stress cases.
+Every library gets a 512-token budget, `cl100k_base` and no overlap. The charts below show the **single-core**
+lane from the 17 November 2026 run.
 
-Setup: GitHub Actions runner (AMD EPYC 9V74, 4 logical CPUs, 15.6 GB RAM), Python 3.12.16, cold start (every
-timing is the first and only call in a fresh process), median of 5 rounds. Compared libraries: chonkie 1.7.0,
-langchain-text-splitters 1.1.3, semchunk 4.1.1, semantic-text-splitter 0.33.2, tiktoken 0.14.0 (plain token
-window). `text_chipper` is the default mode (Markdown-aware, strict) and `text_chipper (flat)` is
-`include_context=False`. Results come from one run on a shared virtual machine, so treat the ratios as
-indicative, especially on the small files (under 120 KiB, where a call takes only a few milliseconds).
-Method, metric definitions, raw data and the harness are in [`benchmarks/`](benchmarks/).
+The run used a GitHub Actions runner (AMD EPYC 9V45, 4 logical CPUs, 15.6 GB RAM) and Python 3.12.16.
+Timings are medians of five cold runs in fresh processes. Compared versions: chonkie 1.7.0,
+langchain-text-splitters 1.1.3, semchunk 4.1.1, semantic-text-splitter 0.33.3 and tiktoken 0.14.0.
+`text_chipper` is the default Markdown-aware strict mode; `text_chipper (flat)` uses
+`include_context=False`. This is one run on a shared virtual machine, so treat ratios as indicative,
+especially on small inputs. The raw results, metric definitions and harness are in
+[`benchmarks/`](benchmarks/) and [`benchmarks/results/20261117_133546/`](benchmarks/results/20261117_133546/).
 
 ### Speed
 
-Throughput averaged over all 12 workloads (geometric mean): text_chipper reaches 34.0 MiB/s, which is 2.8
-times the speed of a plain tiktoken token window and 4.4 to 15 times the speed of the other chunking
-libraries.
+Throughput averaged geometrically over the 12 workloads: text_chipper reaches **37.1 MiB/s** in the
+single-core lane. That is 2.4 times the throughput of a plain tiktoken window (15.5 MiB/s), and 3.9 to
+11.6 times the throughput of the other chunking libraries.
 
 ![Bar chart: geometric-mean throughput of each library over all 12 workloads](benchmarks/charts/speed_overall.png)
 
-text_chipper is the fastest library on 11 of 12 workloads. The exception is `stress_cjk_unbroken` (a megabyte
-of CJK text without separators), where it reaches 7.6 MiB/s while tiktoken window (15.8 MiB/s) and chonkie
-TokenChunker (11.2 MiB/s) are faster. On `real_chatlogs` (39 KiB, 2 to 3 ms per call) text_chipper reaches 20.4 MiB/s against 12.3 for
-tiktoken window, but at this call length the spread between processes is large (over 50 % for
-text_chipper), so treat that ratio as rough.
+text_chipper is the fastest approach on 10 of 12 workloads. The exceptions are `stress_cjk_unbroken`,
+where the tiktoken window reaches 19.7 MiB/s against text_chipper's 16.0 MiB/s, and `real_chatlogs`,
+where text_chipper flat mode reaches 18.4 MiB/s against 16.1 MiB/s in the default mode. Results on small
+inputs have more timing noise, so treat close ratios as rough.
 
 ![Heat map: MiB/s of each library on each workload](benchmarks/charts/speed_per_workload.png)
 
 ### Memory
 
-Peak memory of the whole Python process (interpreter and imported library included), single core, mean over
-all workloads. Every library stays between 96 and 104 MB, most of it the interpreter and the tokenizer.
-text_chipper adds 1.4 MB on average while chunking and about 10 MB on its worst workload.
+Peak memory of the whole Python process (including the interpreter and imported library), single core,
+averaged over the workloads. Mean process peaks range from 94 to 102 MB; the largest single-workload peak
+was 119 MB. text_chipper adds 1.7 MB on average while chunking; its largest measured increase is about 11.7 MB.
 
 ![Bar chart: peak memory of the Python process per library, single core](benchmarks/charts/memory_single_core.png)
 
@@ -230,105 +230,72 @@ text_chipper adds 1.4 MB on average while chunking and about 10 MB on its worst 
 
 ![Scorecard: token limit, words, source text and code fences per library, with speed](benchmarks/charts/quality_scorecard.png)
 
-- **Token limit**: no text_chipper chunk exceeded 512 tokens on any workload. LangChain went over the limit
-  in up to 16.7 % of chunks (3 of the 18 chunks of `real_chatlogs`; its largest chunk had 514 tokens), and
-  tiktoken window and chonkie TokenChunker in 2.6 % of the chunks of `multilingual` (513 tokens). Token
-  counts are measured independently with `cl100k_base` on the text each library delivers.
-- **Words and code**: token windows cut words in half (up to 35.5 % of their cut points) and break 21 to 23 %
-  of the small code fences (those that fit in half the budget); chonkie RecursiveChunker breaks about 22 %.
-  text_chipper made one cut inside a word in the whole run (1 of 1,259 cut points in `stress_giant_list`,
-  none on the other 11 workloads) and kept every small fence whole (392 in `markdown_doc`, 3,434 in
-  `code_heavy`).
-- **Coverage** means the share of the input's non-whitespace text that appears in some chunk. text_chipper
-  (default mode) covers 99.57 % of `markdown_doc` and 100 % of the other 11 workloads. The 3,613
-  non-whitespace characters missing from the chunk text of `markdown_doc` are all heading text, which
-  text_chipper returns in each chunk's `headers` (and in `contextualized_text`) instead of the chunk body;
-  counting them, coverage is 100 % and no character is unexplained. text_chipper (flat) covers 100 %
-  everywhere. tiktoken window, chonkie TokenChunker and chonkie RecursiveChunker lose a third (32.6 %) of the
-  unsegmented CJK input, and tiktoken window and chonkie TokenChunker lose 27.6 % of `multilingual`: their
-  chunks contain replacement characters (U+FFFD) instead of the original text.
-- **Chunk ends**: semchunk and chonkie RecursiveChunker end slightly more chunks at a sentence or line break
-  on average (91.7 % against 85.9 % for text_chipper). The gap comes mostly from `real_wikitexts` (43.1 %
-  against 100 %) and `real_pubmed` (88.2 % against 100 %).
+- **Token limit**: no text_chipper chunk exceeded 512 tokens on any workload. Across all workloads,
+  LangChain had 15 over-limit chunks; the tiktoken window and chonkie TokenChunker had 18 each. Their
+  largest overshoot was two tokens for LangChain (514); the other two reached 513. Counts were checked independently with `cl100k_base` on delivered
+  chunk text.
+- **Words and code**: token windows cut words at up to 35.5 % of cut points and broke about 23 % of the
+  measured small fences. Chonkie's RecursiveChunker broke about 22 %. text_chipper kept all 392 measured
+  fences in `markdown_doc` and all 3,434 in `code_heavy` intact. Its only workload with a measured
+  mid-word cut was `stress_giant_list` (under 0.1 % of cut points).
+- **Coverage** is reported two ways. **Body coverage** counts source text found verbatim in chunk bodies;
+  it is 99.57 % for text_chipper on `markdown_doc`. **Content + heading metadata** also counts recognized
+  heading text carried in `headers`; the benchmark treats those heading lines as preserved when their
+  titles appear in the metadata, giving 100 % content + heading metadata coverage. The original Markdown
+  heading markers are not copied into the body. In the unsegmented CJK stress input,
+  tiktoken window and both Chonkie chunkers produced replacement characters (U+FFFD) in 245 chunks;
+  text_chipper produced none. The coverage metric marks a damaged chunk unmatched, so its 32.6 % figure
+  overstates the number of characters actually lost.
+- **Chunk ends** vary by corpus. For example, semchunk and chonkie RecursiveChunker end every
+  `real_wikitexts` chunk at a sentence or line break, while text_chipper does so for 43.1 % of its chunks.
 
 To regenerate the charts after a new benchmark run:
 
 ```bash
 pip install matplotlib
-python benchmarks/make_charts.py benchmarks/results/20261113_213722/results.json benchmarks/charts
+python benchmarks/make_charts.py benchmarks/results/20261117_133546/results.json benchmarks/charts --svg
 ```
-
----
-
 
 ### Large files and streaming
 
-The comparison above uses files of up to about 1 MB. To see what happens on a big input, we chunked one
-514.3 MiB text file (WikiText-103 raw) with 512-token chunks, `cl100k_base` and no overlap. Each run is a fresh
-process on a GitHub Actions runner (4 logical CPUs, Python 3.12), and every library is configured exactly as in the
-benchmark above. Time includes reading the file. Memory is the growth of the process's peak memory after warm-up.
-Numbers are medians of 3 runs from one workflow run per lane; this section shows the single-core lane, the all-cores
-lane and the raw data are in [`benchmarks/results/streaming_20261114/`](benchmarks/results/streaming_20261114/).
-
-text_chipper reads the file with `from_file_stream`. The other libraries take a string, so they were given the file in
-blocks of about 8 MiB (text_chipper also ran in this block mode). Every library also ran on the whole file read into
-one string, see the notes below.
+The comparison above uses files of up to about 1 MB. For a larger input, we chunked a 514.3 MiB WikiText-103
+file with 512-token chunks, `cl100k_base` and no overlap. The 17 November run used a GitHub Actions runner
+with 4 logical CPUs and Python 3.12; this section reports its single-core lane. Time includes reading the
+file. Memory is the increase in peak process memory after warm-up. Timings and memory are medians of three
+runs; the verification pass is reported separately. Raw results are in
+[`benchmarks/results/streaming_20261117/`](benchmarks/results/streaming_20261117/).
 
 ![Bar chart: throughput of each library on a 514 MiB file, single-core lane](benchmarks/charts/streaming_speed_single.png)
 
 | Library | File given as | Time | MiB/s | Memory growth | Chunks over 512 tokens |
 | --- | --- | ---: | ---: | ---: | ---: |
-| text_chipper | `from_file_stream` | 24 s | 21.3 | 71 MB | 0 |
-| text_chipper | 8 MiB blocks | 28 s | 18.0 | 130 MB | 0 |
-| tiktoken window | 8 MiB blocks | 39 s | 13.1 | 149 MB | 5 of 234,790 |
-| chonkie RecursiveChunker | 8 MiB blocks | 41 s | 12.4 | 117 MB | 0 |
-| chonkie TokenChunker | 8 MiB blocks | 47 s | 11.0 | 210 MB | 5 of 234,790 |
-| LangChain | 8 MiB blocks | 108 s | 4.8 | 83 MB | 10 of 292,611 |
-| semchunk | 8 MiB blocks | 112 s | 4.6 | 3.3 GB | 0 |
-| semantic-text-splitter | 8 MiB blocks | 158 s | 3.2 | 87 MB | 0 |
+| text_chipper | `from_file_stream` | 25 s | 20.5 | 56 MB | 0 |
+| text_chipper | 8 MiB blocks | 28 s | 18.3 | 140 MB | 0 |
+| tiktoken window | 8 MiB blocks | 40 s | 12.8 | 149 MB | 5 of 234,790 |
+| chonkie RecursiveChunker | 8 MiB blocks | 41 s | 12.5 | 110 MB | 0 |
+| chonkie TokenChunker | 8 MiB blocks | 46 s | 11.1 | 208 MB | 5 of 234,790 |
+| LangChain | 8 MiB blocks | 106 s | 4.9 | 98 MB | 10 of 292,611 |
+| semchunk | 8 MiB blocks | 111 s | 4.6 | 3.3 GB | 0 |
+| semantic-text-splitter | 8 MiB blocks | 152 s | 3.4 | 87 MB | 0 |
 
 ![Bar chart: memory growth of each library on a 514 MiB file, single-core lane](benchmarks/charts/streaming_memory_single.png)
 
-- **Memory stays flat when streaming.** The process grew by 71 MB
-  on a 514 MiB file (125 MB peak for the whole process). Reading the file into one string and calling `chunk()` grew by
-  4.6 GB. The output is the same: the SHA-256 of the delivered
-  chunk text is identical for `from_file_stream` and for `chunk()` on the whole file, in both lanes.
-- **Speed.** Streaming on one core reaches 21.3 MiB/s,
-  1.6 to 6.7 times faster than the other libraries fed in blocks. The gap is smaller than on the small files above
-  (2.8 times against the tiktoken window there, 1.6 times here).
-- **All-cores lane.** `from_file_stream` is single-threaded (it used one core), so it reached
-  19.8 MiB/s there. text_chipper in block mode used about 2.4 cores
-  and reached 30.9 MiB/s; the other libraries stayed on one core.
-  If you have the cores and memory, block mode is faster than streaming; streaming is the choice when memory is the limit.
-
-<details open>
-<summary>All-cores lane charts (speed and memory)</summary>
-
-![Bar chart: throughput of each library on a 514 MiB file, all-cores lane](benchmarks/charts/streaming_speed_all.png)
-
-![Bar chart: memory growth of each library on a 514 MiB file, all-cores lane](benchmarks/charts/streaming_memory_all.png)
-
-</details>
-
-- **Token limit at scale.** The overshoot is rare on this text: one-token overshoots (513) in 5 of 234,790 chunks
-  for the tiktoken window and chonkie TokenChunker, and in 10 of 292,611 for LangChain. text_chipper, chonkie
-  RecursiveChunker, semchunk and semantic-text-splitter had none. The 16.7 % above is for a small chat-log file, so the
-  rate depends on the text.
+- **Memory stays bounded while streaming.** The process grew by 56 MB on the 514 MiB file. Reading it
+  into one string and calling `chunk()` grew by 4.6 GB. Verification hashes for `from_file_stream` and
+  whole-file `chunk()` match; the 8 MiB block path can differ at block edges.
+- **Speed.** Streaming reached 20.5 MiB/s, 1.6 to 6.0 times the other libraries fed in blocks. It used
+  one core. This attached run contains only single-core results, so it does not support an all-cores
+  comparison.
+- **Token limit at scale.** The verification run found five one-token overshoots in each of the tiktoken
+  window and Chonkie TokenChunker block paths, and ten in LangChain. The other block paths and text_chipper
+  streaming stayed within budget.
 
 Notes and limits:
 
-- **Whole-file mode.** All libraries peak at 4.6 to 9.0 GB when the file is read into one string (full table in
-  [`benchmarks/results/streaming_20261114/summary.md`](benchmarks/results/streaming_20261114/summary.md)).
-  text_chipper, LangChain, chonkie RecursiveChunker and semantic-text-splitter are within 2 MB of each other, which
-  suggests that the peak is set by reading the file into a Python string rather than by the library; we have not
-  verified this. The tiktoken window and chonkie TokenChunker also hold the full token list (7.7 and 9.0 GB).
-  semchunk grows to 3.3 GB even in block mode (probably its default token-count cache, not verified).
-- **Noise.** This is one workflow run per lane. The two lanes ran on different virtual machines, so do not compare
-  lanes for single-threaded modes, and the same streaming mode took between 22 and 29 s in different workflow runs.
-  Treat ratios as indicative.
-- **Blocks are our choice.** Feeding a string-only library in 8 MiB blocks is how one would process a large file with it;
-  chunks at block edges can differ from a one-call run.
-- **Not measured:** retrieval quality.
+- Whole-file runs usually grew by 4.6 to 9.0 GB because the input was read into one string. semchunk also
+  grew by about 3.3 GB in block mode; the cause has not been verified.
+- The block path feeds string-only libraries about 8 MiB at a time. Chunks can differ at block edges.
+- Retrieval quality is not measured.
 
 
 ## 🔌 Pluggable tokenizers

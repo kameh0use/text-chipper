@@ -43,11 +43,11 @@
 
 ## Results per workload
 
-Columns are defined in `benchmarks/README.md`. `–` means not applicable or not measured. Failures are listed at the end.
+Body coverage counts exact source text found in chunk bodies. Content + heading metadata also counts recognized heading text carried in `headers`. `–` means not applicable or not measured. Failures are listed at the end.
 
 ### `stress_single_line` (stress, plain) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | chonkie RecursiveChunker | 5.2 | 190.4 | 10 | 190 | 1.00 | 10 | 623 | 493 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | – | 0.089 | 96.7 |
 | chonkie TokenChunker | 9.7 | 103.0 | 2 | 109 | 1.05 | 10 | 580 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 27.8 | 4.3 | – | – | 0.080 | 90.0 |
@@ -60,7 +60,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `stress_single_line` (stress, plain) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | text_chipper (flat) | 33.2 | 30.0 | 20 | 30 | 1.00 | 0 | 594 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | – | 0.085 | 95.7 |
 | chonkie RecursiveChunker | 5.3 | 189.4 | 4 | 189 | 1.00 | 9 | 623 | 493 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | – | 0.089 | 96.7 |
@@ -73,7 +73,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `markdown_doc` (synthetic, markdown) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | tiktoken window | 11.3 | 88.4 | 4 | 88 | 1.00 | 0 | 622 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 24.6 | 7.2 | 76.8 | 3.1 | 0.090 | 92.0 |
 | chonkie RecursiveChunker | 8.3 | 119.8 | 3 | 120 | 1.00 | 2 | 661 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | 78.3 | 8.8 | 0.098 | 95.3 |
@@ -86,7 +86,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `markdown_doc` (synthetic, markdown) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | chonkie RecursiveChunker | 8.3 | 120.7 | 4 | 121 | 1.00 | 1 | 661 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | 78.3 | 8.8 | 0.098 | 95.3 |
 | tiktoken window | 11.5 | 87.2 | 3 | 87 | 1.00 | 0 | 622 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 24.6 | 7.2 | 76.8 | 3.1 | 0.090 | 92.0 |
@@ -99,7 +99,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `code_heavy` (synthetic, markdown) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | text_chipper | 40.0 | 25.0 | 15 | 25 | 1.00 | 10 | 920 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | 100.0 | 0.0 | 0.253 | 88.0 |
 | tiktoken window | 7.6 | 132.1 | 1 | 132 | 1.00 | 0 | 809 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 16.0 | 12.9 | 79.0 | 0.0 | 0.206 | 75.0 |
@@ -112,7 +112,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `code_heavy` (synthetic, markdown) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | text_chipper (flat) | 28.2 | 35.5 | 19 | 35 | 1.00 | 0 | 920 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | 100.0 | 0.0 | 0.252 | 88.0 |
 | semantic-text-splitter | 2.0 | 511.2 | 3 | 511 | 1.00 | 0 | 920 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | 100.0 | 0.0 | 0.252 | 87.7 |
@@ -125,7 +125,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_pubmed` (real, markdown) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | tiktoken window | 12.5 | 38.4 | 4 | 38 | 1.00 | 0 | 229 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 15.4 | 6.6 | – | 0.0 | 0.074 | 92.3 |
 | LangChain | 4.0 | 119.7 | 4 | 120 | 1.00 | 0 | 313 | 511 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 86.5 | – | 0.0 | 0.100 | 100.0 |
@@ -138,7 +138,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_pubmed` (real, markdown) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | LangChain | 4.0 | 120.3 | 3 | 120 | 1.00 | 0 | 313 | 511 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 86.5 | – | 0.0 | 0.100 | 100.0 |
 | semantic-text-splitter | 2.1 | 228.8 | 1 | 229 | 1.00 | 0 | 298 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 88.2 | – | 0.0 | 0.100 | 100.0 |
@@ -151,7 +151,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `multilingual` (synthetic, plain) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | chonkie RecursiveChunker | 17.9 | 56.0 | 1 | 56 | 1.00 | 4 | 815 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | – | 0.148 | 92.3 |
 | chonkie TokenChunker | 9.7 | 103.0 | 4 | 108 | 1.04 | 15 | 696 | 513 | 2.59 | 72.434 | 72.434 | 72.1 | 35.5 | 4.2 | – | – | 0.095 | 67.0 |
@@ -164,7 +164,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `multilingual` (synthetic, plain) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | semantic-text-splitter | 4.0 | 249.6 | 16 | 250 | 1.00 | 0 | 814 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | – | 0.148 | 92.3 |
 | chonkie TokenChunker | 10.2 | 98.3 | 3 | 98 | 1.00 | 16 | 696 | 513 | 2.59 | 72.434 | 72.434 | 72.1 | 35.5 | 4.2 | – | – | 0.095 | 67.0 |
@@ -177,7 +177,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_wikitexts` (real, markdown) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | LangChain | 4.4 | 25.8 | 3 | 26 | 1.00 | 0 | 66 | 508 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 43.1 | – | 0.0 | 0.083 | 100.0 |
 | semantic-text-splitter | 2.8 | 40.5 | 7 | 41 | 1.00 | 0 | 58 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 17.5 | – | 0.0 | 0.071 | 96.8 |
@@ -190,7 +190,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_wikitexts` (real, markdown) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | semchunk | 4.4 | 25.8 | 11 | 26 | 1.00 | 0 | 66 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | 0.0 | 0.082 | 100.0 |
 | semantic-text-splitter | 2.8 | 40.5 | 7 | 40 | 1.00 | 0 | 58 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 17.5 | – | 0.0 | 0.071 | 96.8 |
@@ -203,7 +203,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_finance` (real, markdown) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | text_chipper (flat) | 41.0 | 17.1 | 6 | 17 | 1.00 | 0 | 380 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 99.2 | – | 0.0 | 0.082 | 99.3 |
 | tiktoken window | 13.3 | 52.8 | 12 | 53 | 1.00 | 0 | 325 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 8.0 | 4.6 | – | 0.0 | 0.067 | 96.5 |
@@ -216,7 +216,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_finance` (real, markdown) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | tiktoken window | 13.8 | 51.1 | 5 | 51 | 1.00 | 0 | 325 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 8.0 | 4.6 | – | 0.0 | 0.067 | 96.5 |
 | LangChain | 2.1 | 333.0 | 36 | 333 | 1.00 | 0 | 488 | 513 | 0.20 | 100.000 | 100.000 | 100.0 | 0.0 | 79.7 | – | 0.0 | 0.095 | 97.9 |
@@ -229,7 +229,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `stress_cjk_unbroken` (stress, plain) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | text_chipper (flat) | 6.0 | 166.2 | 5 | 166 | 1.00 | 0 | 772 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 0.0 | – | – | – | – |
 | semantic-text-splitter | 0.5 | 1,859.4 | 0 | 1,859 | 1.00 | 0 | 752 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 0.0 | – | – | – | – |
@@ -242,7 +242,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `stress_cjk_unbroken` (stress, plain) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | semantic-text-splitter | 0.5 | 1,860.3 | 1 | 1,860 | 1.00 | 0 | 752 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 0.0 | – | – | – | – |
 | tiktoken window | 15.8 | 63.4 | 4 | 63 | 1.00 | 0 | 751 | 512 | 0.00 | 67.361 | 67.361 | 67.4 | 0.0 | 0.0 | – | – | – | – |
@@ -255,7 +255,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `prose_en` (synthetic, plain) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | tiktoken window | 13.2 | 75.7 | 3 | 76 | 1.00 | 0 | 584 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 30.2 | 4.8 | – | – | 0.088 | 94.0 |
 | semantic-text-splitter | 3.9 | 258.1 | 2 | 258 | 1.00 | 0 | 649 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | – | 0.097 | 95.0 |
@@ -268,7 +268,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `prose_en` (synthetic, plain) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | LangChain | 4.7 | 212.6 | 1 | 213 | 1.00 | 0 | 658 | 507 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | – | 0.097 | 93.7 |
 | text_chipper | 64.5 | 15.5 | 39 | 16 | 1.00 | 0 | 654 | 511 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | – | 0.096 | 93.7 |
@@ -281,7 +281,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `stress_giant_list` (stress, markdown) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | LangChain | 3.6 | 279.0 | 7 | 279 | 1.00 | 0 | 656 | 495 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | 0.0 | 0.063 | 97.7 |
 | tiktoken window | 12.2 | 82.0 | 9 | 82 | 1.00 | 0 | 614 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 29.4 | 9.5 | – | 0.0 | 0.057 | 91.0 |
@@ -294,7 +294,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `stress_giant_list` (stress, markdown) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | semchunk | 5.0 | 200.0 | 3 | 200 | 1.00 | 0 | 630 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | 0.0 | 0.060 | 96.0 |
 | LangChain | 3.6 | 277.0 | 2 | 277 | 1.00 | 0 | 656 | 495 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | 0.0 | 0.063 | 97.7 |
@@ -307,7 +307,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_chatlogs` (real, markdown) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | chonkie TokenChunker | 3.5 | 11.0 | 5 | 12 | 1.09 | 0 | 16 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 0.0 | – | 0.0 | 0.068 | 92.6 |
 | semchunk | 4.8 | 7.9 | 1 | 8 | 1.00 | 0 | 18 | 510 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | 0.0 | 0.073 | 94.4 |
@@ -320,7 +320,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_chatlogs` (real, markdown) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | chonkie RecursiveChunker | 3.0 | 12.6 | 7 | 13 | 1.00 | 0 | 18 | 493 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | 0.0 | 0.084 | 96.3 |
 | tiktoken window | 12.3 | 3.1 | 7 | 3 | 1.00 | 0 | 16 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 0.0 | – | 0.0 | 0.068 | 92.6 |
@@ -333,7 +333,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_state_of_the_union` (real, markdown) — lane `all`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | LangChain | 4.1 | 11.3 | 3 | 11 | 1.00 | 0 | 22 | 498 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | 0.0 | 0.067 | 100.0 |
 | chonkie TokenChunker | 3.8 | 12.4 | 5 | 13 | 1.09 | 0 | 21 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 15.0 | – | 0.0 | 0.059 | 94.7 |
@@ -346,7 +346,7 @@ Columns are defined in `benchmarks/README.md`. `–` means not applicable or not
 
 ### `real_state_of_the_union` (real, markdown) — lane `single`, overlap 0
 
-| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body cov % | content cov % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
+| library | MiB/s | median ms | spread % | CPU ms | CPU/wall | RSS Δ MB | chunks | max tok | over % | body coverage % | content + heading metadata % | located % | mid-word % | clean end % | fence ok % | orphan h % | IoU | 1-chunk % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | chonkie RecursiveChunker | 4.1 | 11.3 | 4 | 11 | 1.00 | 0 | 22 | 512 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | 0.0 | 0.065 | 100.0 |
 | LangChain | 4.1 | 11.3 | 4 | 11 | 1.00 | 0 | 22 | 498 | 0.00 | 100.000 | 100.000 | 100.0 | 0.0 | 100.0 | – | 0.0 | 0.067 | 100.0 |
