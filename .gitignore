@@ -31,3 +31,4 @@ build/
 
 # macOS
 .DS_Store
+benchmarks/results/*/_cache/
