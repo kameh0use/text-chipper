@@ -1,6 +1,6 @@
 # text_chipper
 
-<img align="left" hspace="18" src="docs/logo.svg" width="120" alt="text_chipper logo">
+<img align="left" hspace="12" src="docs/logo.svg" width="140" alt="text_chipper logo">
 
 **High-performance, Markdown-aware, strictly budget-enforced text chunking for RAG and LLM pipelines.
 Built in Rust with Python bindings.**
@@ -34,49 +34,41 @@ Built in Rust with Python bindings.**
 
 ### Python
 
+Install the Python package from PyPI:
+
 ```bash
 pip install text-chipper
 ```
 
+Then split a Markdown file:
 
 ```python
 from text_chipper import TextChipper
 
 chipper = TextChipper(max_length=512, overlap=50, encoding="cl100k_base")
 
-for chunk in chipper.chunk(open("README.md", encoding="utf-8").read()):
-    print(chunk.token_count, chunk.headers)   # e.g. 487 ['Install', 'From source']
-    print(chunk.contextualized_text)          # "[ctx:Install > From source] ..." + text
+with open("README.md", encoding="utf-8") as file:
+    for chunk in chipper.chunk(file.read()):
+        print(chunk.token_count, chunk.headers)   # e.g. 487 ['Install', 'From source']
+        print(chunk.contextualized_text)          # "[ctx:Install > From source] ..." + text
 ```
-### Why not just split every N tokens?
 
-A plain token window cuts wherever the budget ends. On Markdown, that can 
-mean a code block split in the middle of a line. Same input, same budget 
-(`max_length = 62`, kept small so it fits on a screen):
-
-![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](docs/before_after.svg)
-
-Reproduce it with [`examples/before_after.py`](examples/before_after.py).
-
-The same comparison on a real README excerpt: the fixed token window on the left, text-chipper on the right. [`benchmarks/before_after_readme.py`](benchmarks/before_after_readme.py) runs it on any Markdown file.
-
-![The same README excerpt split two ways: the fixed token window cuts a code comment and an emoji heading; text-chipper keeps both whole](docs/readme_before_after.svg)
-
-
-Other entry points: `chunk_batch(texts)`, `from_file(path)`, `from_files(paths)`,
-`from_file_stream(path)` (an iterator), `count_tokens(text)`.
-
-Each `TextChunk` has `text`, `headers`, `contextualized_text`, `token_count`, character/byte
-offsets in the normalized text (`start_index`, `end_index`, `start_byte`, `end_byte`) and in
-your original input (`orig_start_index`, `orig_end_index`, `orig_start_byte`, `orig_end_byte`).
-
-Adapters for LangChain and LlamaIndex are in [`integrations/`](integrations/).
+Other Python entry points include `chunk_batch(texts)`, `from_file(path)`, `from_files(paths)`,
+`from_file_stream(path)` (an iterator), and `count_tokens(text)`. Each `TextChunk` also carries
+character and byte offsets in normalized and original input. Adapters for LangChain and LlamaIndex
+are in [`integrations/`](integrations/).
 
 ### Rust
 
+You need a Rust toolchain. Create a project and add the crate from crates.io:
+
 ```bash
+cargo new my_chunker
+cd my_chunker
 cargo add text_chipper
 ```
+
+Replace `src/main.rs` with this example, then run `cargo run`:
 
 ```rust
 use text_chipper::{smart_chunk, Backend, ChunkConfig};
@@ -88,9 +80,9 @@ fn main() -> Result<(), text_chipper::ChipError> {
         overlap_tokens: 50,
         ..Default::default()
     };
-    let text = std::fs::read_to_string("README.md").expect("readable UTF-8 file");
+    let text = "## Retry configuration\n\nThe client retries failed requests up to three times.";
 
-    for chunk in smart_chunk(&text, &cfg, &backend)? {
+    for chunk in smart_chunk(text, &cfg, &backend)? {
         println!("{} {:?}", chunk.token_count, chunk.headers);
         println!("{}", chunk.contextualized_text());
     }
@@ -98,15 +90,31 @@ fn main() -> Result<(), text_chipper::ChipError> {
 }
 ```
 
-The Rust crate is plain Rust: no Python or PyO3 is compiled and no global allocator is
-installed by default. Optional Cargo features: `mimalloc` (use mimalloc as the global
-allocator) and `hf` (Hugging Face `tokenizer.json` support). The `python` feature builds the
-Python extension module and is only meant for the PyPI wheel. See the
+The Rust crate is published on crates.io as `text_chipper` (with an underscore). The Python
+package is separate and uses `pip install text-chipper` (with a hyphen). The Rust crate has no
+runtime dependency on Python or PyO3 and installs no global allocator by default. Optional Cargo
+features include `mimalloc` (global allocator), `hf` (Hugging Face `tokenizer.json` support), and
+`python` (the extension used for the PyPI wheel). See the
 [API documentation](https://docs.rs/text_chipper) for offsets, streaming (`FileChunker`) and
 custom tokenizers.
 
----
+## Why not just split every N tokens?
 
+A plain token window cuts wherever the budget ends. On Markdown, that can split a code block in
+the middle of a line. Same input, same budget (`max_length = 62`, kept small so it fits on a
+screen):
+
+![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](docs/before_after.svg)
+
+Reproduce it with [`examples/before_after.py`](examples/before_after.py).
+
+The same comparison on a real README excerpt: the fixed token window on the left, text-chipper
+on the right. [`benchmarks/before_after_readme.py`](benchmarks/before_after_readme.py) runs it on
+any Markdown file.
+
+![The same README excerpt split two ways: the fixed token window cuts a code comment and an emoji heading; text-chipper keeps both whole](docs/readme_before_after.svg)
+
+---
 
 
 ## 🛠️ Scope & Installation
