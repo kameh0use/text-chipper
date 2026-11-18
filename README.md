@@ -217,7 +217,7 @@ Throughput averaged geometrically over the 12 workloads: text_chipper reaches **
 single-core lane. That is 2.4 times the throughput of a plain tiktoken window (15.5 MiB/s), and 3.9 to
 11.6 times the throughput of the other chunking libraries.
 
-![Bar chart: geometric-mean throughput of each library over all 12 workloads](benchmarks/charts/speed_overall.png)
+![Bar chart: geometric-mean throughput of each library over all 12 workloads](benchmarks/charts/speed_overall_latest.png)
 
 text_chipper is the fastest approach on 10 of 12 workloads. The exceptions are `stress_cjk_unbroken`,
 where the tiktoken window reaches 19.7 MiB/s against text_chipper's 16.0 MiB/s, and `real_chatlogs`,
