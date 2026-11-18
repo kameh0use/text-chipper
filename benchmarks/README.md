@@ -27,6 +27,22 @@ five cold runs on a GitHub Actions runner (AMD EPYC 9V45, 4 logical CPUs, Python
 metrics and limitations. Lanes: `single` pins the process to one CPU and sets thread variables to 1; `all` applies no
 restriction. The README summary charts use the `single` lane.
 
+### Latest 12-workload results
+
+The [per-workload report](results/20261117_133546/report.md) and [raw results](results/20261117_133546/results.json) include every library and metric. The run covers:
+
+- **Synthetic:** `prose_en`, `markdown_doc`, `code_heavy`, `multilingual`
+- **Real-world:** `real_pubmed`, `real_wikitexts`, `real_finance`, `real_chatlogs`, `real_state_of_the_union`
+- **Stress:** `stress_single_line`, `stress_cjk_unbroken`, `stress_giant_list`
+
+| Measure | 17 November result |
+| --- | --- |
+| Throughput | 37.1 MiB/s geometric mean; fastest on 10 of 12 workloads |
+| Chunks over 512 tokens | text_chipper: 0; LangChain: 15 (maximum 514); tiktoken window and Chonkie TokenChunker: 18 each (maximum 513) |
+| Mid-word cuts | text_chipper: 1 in 1,259 measured cut points (`stress_giant_list`); none in the other 11 workloads |
+
+
+
 The reports separate two coverage measures. **Body coverage** is the share of non-whitespace source characters found
 verbatim in chunk bodies. **Content + heading metadata coverage** additionally counts recognized Markdown heading
 lines when their titles are carried in a chunk's `headers`. The second measure evaluates the text content the chunker
