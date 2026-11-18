@@ -41,6 +41,10 @@ The [per-workload report](results/20261117_133546/report.md) and [raw results](r
 | Chunks over 512 tokens | text_chipper: 0; LangChain: 15 (maximum 514); tiktoken window and Chonkie TokenChunker: 18 each (maximum 513) |
 | Mid-word cuts | text_chipper: 1 in 1,259 measured cut points (`stress_giant_list`); none in the other 11 workloads |
 
+**Why Chonkie’s reported count can differ (v1.7.0):** `TokenChunker` stores the size of each token-ID window, then decodes each window independently. If a boundary splits a multi-byte UTF-8 character, tiktoken’s default replacement decoding can emit `U+FFFD`; re-encoding the returned text may therefore exceed the stored window count, and the original character is not preserved. See [Chonkie’s token-window implementation](https://github.com/feyninc/chonkie/blob/v1.7.0/src/chonkie/chunker/token.py#L855-L870) and [tiktoken’s decode behavior](https://github.com/openai/tiktoken/blob/main/tiktoken/core.py#L1476-L1511). This explains how a 512-ID window can yield 513 tokens when the returned text is recounted. It does not confirm that every Chonkie overflow in this benchmark has this cause; that requires checking the affected chunks for `U+FFFD`.
+
+
+
 
 
 The reports separate two coverage measures. **Body coverage** is the share of non-whitespace source characters found
