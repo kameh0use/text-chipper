@@ -224,7 +224,7 @@ where the tiktoken window reaches 19.7 MiB/s against text_chipper's 16.0 MiB/s, 
 where text_chipper flat mode reaches 18.4 MiB/s against 16.1 MiB/s in the default mode. Results on small
 inputs have more timing noise, so treat close ratios as rough.
 
-![Heat map: MiB/s of each library on each workload](benchmarks/charts/speed_per_workload.png)
+![Heat map: MiB/s of each library on each workload](benchmarks/charts/speed_per_every_workload.png)
 
 ### Memory
 
