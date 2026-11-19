@@ -231,6 +231,13 @@ impl TextStreamIter {
 ///         an estimate; an oversized grapheme is returned as its own chunk).
 ///     tokenizer_file: path to a Hugging Face `tokenizer.json` (needs a build with the `hf`
 ///         feature).
+///     guard_encodings: extra built-in encodings (same names as `encoding`) that every chunk
+///         must also fit. The budget is then enforced on the *largest* count over the primary
+///         tokenizer and all guards, so strict mode guarantees `max_length` for each of them.
+///     guard_tokenizer_files: extra Hugging Face `tokenizer.json` paths used as guards in the
+///         same way (needs the `hf` feature). Guards cost one tokenizer pass each and chunks are
+///         sized by the tokenizer that yields the most tokens. Special tokens a consumer adds
+///         (e.g. BGE's `[CLS]`/`[SEP]`) are not counted: lower `max_length` by that amount.
 ///
 /// All errors are raised as exceptions; no method returns an empty or partial result for
 /// invalid input.
@@ -274,7 +281,9 @@ impl TextChipper {
         include_context=true,
         merge_blocks=true,
         strict=true,
-        tokenizer_file=None
+        tokenizer_file=None,
+        guard_encodings=None,
+        guard_tokenizer_files=None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -288,6 +297,8 @@ impl TextChipper {
         merge_blocks: bool,
         strict: bool,
         tokenizer_file: Option<&str>,
+        guard_encodings: Option<Vec<String>>,
+        guard_tokenizer_files: Option<Vec<String>>,
     ) -> PyResult<Self> {
         let cfg = ChunkConfig {
             max_tokens: max_length,
@@ -303,10 +314,20 @@ impl TextChipper {
         // BPE tables take a while to build: do it without holding the GIL.
         let (backend, encoding) = py
             .detach(|| -> Result<(Arc<Backend>, String), ChipError> {
-                match tokenizer_file {
-                    Some(path) => Ok((Backend::from_tokenizer_file(path)?, format!("hf:{path}"))),
-                    None => Ok((Backend::from_name(encoding)?, encoding.to_string())),
+                let (primary, mut label) = match tokenizer_file {
+                    Some(path) => (Backend::from_tokenizer_file(path)?, format!("hf:{path}")),
+                    None => (Backend::from_name(encoding)?, encoding.to_string()),
+                };
+                let mut parts = vec![primary];
+                for name in guard_encodings.as_deref().unwrap_or(&[]) {
+                    parts.push(Backend::from_name(name)?);
+                    label.push_str(&format!("+{name}"));
                 }
+                for path in guard_tokenizer_files.as_deref().unwrap_or(&[]) {
+                    parts.push(Backend::from_tokenizer_file(path)?);
+                    label.push_str(&format!("+hf:{path}"));
+                }
+                Ok((Backend::max_of(parts)?, label))
             })
             .map_err(to_pyerr)?;
 

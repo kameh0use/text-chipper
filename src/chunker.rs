@@ -16,6 +16,7 @@ use super::{
 
 /// Upper bound for the chunker's retained pending text plus deferred heading prefix.
 const MAX_PENDING_STATE_BYTES: usize = 2 * 1024 * 1024;
+const MIN_RESIDUAL_FILL_TOKENS: usize = 32;
 /// Only cache short, repeatedly occurring structural fragments. This keeps both hashing
 /// overhead and retained memory bounded for varied documents.
 /// Blocks up to this size are always counted whole by `count_block_text`; larger ones may be
@@ -532,6 +533,99 @@ impl SmartChunker {
         Ok(None)
     }
 
+    /// Reclaim a pending chunk's unused capacity with the prefix of the next text block.
+    /// Only equal heading contexts and clean sentence/line boundaries are eligible; every
+    /// candidate is re-counted as delivered text before it mutates state, preserving the hard
+    /// budget guarantee of the configured backend.
+    fn fill_pending_from_block(&mut self, b: &mut Block) -> Result<bool, ChipError> {
+        let max = self.cfg.max_tokens;
+        if max == 0 || !self.cfg.merge_blocks || b.is_code || b.text.trim().is_empty() {
+            return Ok(false);
+        }
+        let Some(p) = self.pending.as_ref() else {
+            return Ok(false);
+        };
+        if p.headers.as_slice() != b.headers.as_slice() || !p.prefix.is_empty() {
+            return Ok(false);
+        }
+        let mut base = p.text.clone();
+        base.push_str(&b.sep_before);
+        let base_count = self.count_delivered_at(&p.headers, &base, CountSite::MergeCandidate);
+        let mut body_budget = max.saturating_sub(base_count).saturating_sub(1);
+        if body_budget < MIN_RESIDUAL_FILL_TOKENS {
+            return Ok(false);
+        }
+
+        let origin = Origin {
+            byte: b.start_byte,
+            chr: b.start_char,
+        };
+        let known_total = (b.text.len() <= BLOCK_PROBE_MIN_BYTES)
+            .then(|| self.backend.count_at(&b.text, CountSite::BlockWhole));
+        let mut accepted = None;
+        for _ in 0..4 {
+            if body_budget < MIN_RESIDUAL_FILL_TOKENS {
+                break;
+            }
+            let mut pieces = Vec::new();
+            split_by_tokens_with_lists_known(
+                &b.text,
+                origin,
+                body_budget,
+                0,
+                self.cfg.snap_words,
+                &self.backend,
+                &b.headers,
+                list_cuts(b),
+                known_total,
+                &mut pieces,
+            );
+            let Some(first) = pieces.first() else { break };
+            let end = first
+                .end_byte
+                .saturating_sub(b.start_byte)
+                .min(b.text.len());
+            if end == 0 || end >= b.text.len() {
+                break;
+            }
+            let prefix = &b.text[..end];
+            let tail = prefix.trim_end();
+            let sentence_ended = tail
+                .chars()
+                .last()
+                .is_some_and(|c| ".!?…。！？".contains(c));
+            let line_ended = prefix.ends_with('\n') || b.text[end..].starts_with('\n');
+            if !sentence_ended && !line_ended {
+                return Ok(false);
+            }
+            let mut candidate = base.clone();
+            candidate.push_str(&b.text[..end]);
+            let exact = self.count_delivered_at(&p.headers, &candidate, CountSite::MergeCandidate);
+            if exact <= max {
+                accepted = Some((end, candidate, exact));
+                break;
+            }
+            body_budget = body_budget.saturating_sub(exact - max + 1);
+        }
+
+        let Some((end, candidate, exact)) = accepted else {
+            return Ok(false);
+        };
+        let consumed_chars = char_len(&b.text[..end]);
+        let context = self.ctx_tokens_ro(&p.headers);
+        if let Some(p) = self.pending.as_mut() {
+            p.text = candidate;
+            p.tokens = exact.saturating_sub(context);
+            p.exact_total = Some(exact);
+            p.joins = 0;
+        }
+        b.text = b.text[end..].to_string();
+        b.start_byte += end;
+        b.start_char += consumed_chars;
+        b.sep_before.clear();
+        Ok(true)
+    }
+
     /// Token count of a whole block. For very large blocks a prefix is counted first, with
     /// doubling sizes: as soon as a prefix alone exceeds `max_tokens` the block certainly
     /// does not fit, and that (lower-bound) count is returned instead of tokenizing the whole
@@ -668,70 +762,165 @@ impl SmartChunker {
             // Do not allocate a concatenated candidate unless the complete pending
             // state (including a deferred heading prefix) stays within its byte cap.
             if can_build_candidate {
-              'merge: {
-                // Calculate the cheap estimate before allocating the candidate.
-                let mut fast_merge: Option<(usize, Option<usize>, usize)> = None;
-                // Retain the estimate before the +2 safety margin for diagnostics only
-                // (read only in `stats` builds).
-                #[cfg(feature = "stats")]
-                let mut rejected_base_estimate: Option<usize> = None;
+                'merge: {
+                    // Calculate the cheap estimate before allocating the candidate.
+                    let mut fast_merge: Option<(usize, Option<usize>, usize)> = None;
+                    // Retain the estimate before the +2 safety margin for diagnostics only
+                    // (read only in `stats` builds).
+                    #[cfg(feature = "stats")]
+                    let mut rejected_base_estimate: Option<usize> = None;
 
-                if max > 0 {
-                    let sep_t = if b.sep_before.is_empty() {
-                        0
-                    } else {
-                        self.count_small_cached_at(&b.sep_before, CountSite::MergeSeparator)
-                    };
+                    if max > 0 {
+                        let sep_t = if b.sep_before.is_empty() {
+                            0
+                        } else {
+                            self.count_small_cached_at(&b.sep_before, CountSite::MergeSeparator)
+                        };
 
-                    let prefix_t = if carry_prefix {
-                        self.count_small_cached_at(&p.prefix, CountSite::MergePrefix)
-                    } else {
-                        0
-                    };
+                        let prefix_t = if carry_prefix {
+                            self.count_small_cached_at(&p.prefix, CountSite::MergePrefix)
+                        } else {
+                            0
+                        };
 
-                    let body_est = p.tokens + prefix_t + sep_t + b_tokens;
-                    // A separator that ends in a newline starts a fresh pre-token in the
-                    // BPE tokenizers, so the parts add up and the per-join slack is unnecessary.
-                    let join_cost = if b.sep_before.ends_with('\n') && self.backend.joins_are_additive() {
-                        0
-                    } else {
-                        1
-                    };
-                    let joins = p.joins + join_cost + usize::from(carry_prefix);
+                        let body_est = p.tokens + prefix_t + sep_t + b_tokens;
+                        // A separator that ends in a newline starts a fresh pre-token in the
+                        // BPE tokenizers, so the parts add up and the per-join slack is unnecessary.
+                        let join_cost =
+                            if b.sep_before.ends_with('\n') && self.backend.joins_are_additive() {
+                                0
+                            } else {
+                                1
+                            };
+                        let joins = p.joins + join_cost + usize::from(carry_prefix);
 
-                    if ctx_t + body_est + joins < max {
-                        fast_merge = Some((body_est, None, joins));
-                    } else {
-                        #[cfg(feature = "stats")]
-                        {
-                            rejected_base_estimate = Some(ctx_t + body_est + joins);
+                        if ctx_t + body_est + joins < max {
+                            fast_merge = Some((body_est, None, joins));
+                        } else {
+                            #[cfg(feature = "stats")]
+                            {
+                                rejected_base_estimate = Some(ctx_t + body_est + joins);
+                            }
+                            record_event(CountSite::MergeEstimateRejected, candidate_len);
+                            // Even if every join cost nothing and BPE saved up to two tokens per
+                            // join, the candidate cannot fit: reject without tokenizing it.
+                            if ctx_t + body_est > max + 2 * (joins + 1) {
+                                record_event(CountSite::MergeEarlyReject, candidate_len);
+                                break 'merge;
+                            }
                         }
-                        record_event(CountSite::MergeEstimateRejected, candidate_len);
-                        // Even if every join cost nothing and BPE saved up to two tokens per
-                        // join, the candidate cannot fit: reject without tokenizing it.
-                        if ctx_t + body_est > max + 2 * (joins + 1) {
-                            record_event(CountSite::MergeEarlyReject, candidate_len);
-                            break 'merge;
+                    } else {
+                        // Unlimited-token mode skips the estimate but still needs exact counts
+                        // to maintain the pending token metadata.
+                        record_event(CountSite::MergeFastDisabled, candidate_len);
+                    }
+
+                    // Fast path: append directly to the existing pending String.
+                    if let Some((tokens, exact_total, joins)) = fast_merge {
+                        if !carry_prefix {
+                            record_event(
+                                CountSite::MergeFastDirect,
+                                b.sep_before.len().saturating_add(b.text.len()),
+                            );
+                            if let Some(p) = self.pending.as_mut() {
+                                p.text
+                                    .reserve(b.sep_before.len().saturating_add(b.text.len()));
+                                p.text.push_str(&b.sep_before);
+                                p.text.push_str(&b.text);
+                                p.tokens = tokens;
+                                p.exact_total = exact_total;
+                                p.joins = joins;
+                                p.headers = common;
+
+                                self.peak_pending_bytes = self
+                                    .peak_pending_bytes
+                                    .max(p.text.len().saturating_add(p.prefix.len()));
+                            }
+
+                            return Ok(());
+                        }
+
+                        // The estimate succeeded, but the deferred heading prefix must be
+                        // materialized into a candidate before the pending state can be updated.
+                        record_event(CountSite::MergeFastPrefix, candidate_len);
+                    }
+
+                    // Exact-count path: retain the original candidate construction.
+                    let mut candidate = String::with_capacity(candidate_len);
+
+                    if section_changed {
+                        candidate.push_str(&p.prefix);
+                    }
+
+                    candidate.push_str(&p.text);
+                    candidate.push_str(&b.sep_before);
+                    candidate.push_str(&b.text);
+
+                    let mut merged = fast_merge;
+
+                    if merged.is_none() {
+                        record_event(CountSite::MergeExactFallback, candidate_len);
+                        let candidate_tokens =
+                            self.count_delivered_at(&common, &candidate, CountSite::MergeCandidate);
+
+                        // Compare the pre-margin estimate with the exact delivered-token count.
+                        // These diagnostics run only in stats builds and do not affect decisions.
+                        #[cfg(feature = "stats")]
+                        if let Some(base_estimate) = rejected_base_estimate {
+                            let delta_site = if base_estimate < candidate_tokens {
+                                match candidate_tokens - base_estimate {
+                                    1 => CountSite::MergeEstimateUnder1,
+                                    _ => CountSite::MergeEstimateUnder2Plus,
+                                }
+                            } else {
+                                match base_estimate - candidate_tokens {
+                                    0 => CountSite::MergeEstimateEqual,
+                                    1 => CountSite::MergeEstimateOver1,
+                                    2 => CountSite::MergeEstimateOver2,
+                                    3 => CountSite::MergeEstimateOver3,
+                                    _ => CountSite::MergeEstimateOver4Plus,
+                                }
+                            };
+                            record_event(delta_site, candidate_len);
+
+                            // Retrospective simulation: would +1 / +0 have passed the
+                            // estimate gate, and if so, would that have accepted an
+                            // actually-over-budget candidate?
+                            if base_estimate.saturating_add(1) <= max {
+                                record_event(CountSite::MergeMargin1WouldAccept, candidate_len);
+                                if candidate_tokens > max {
+                                    record_event(CountSite::MergeMargin1Unsafe, candidate_len);
+                                }
+                            }
+                            if base_estimate <= max {
+                                record_event(CountSite::MergeMargin0WouldAccept, candidate_len);
+                                if candidate_tokens > max {
+                                    record_event(CountSite::MergeMargin0Unsafe, candidate_len);
+                                }
+                            }
+                        }
+
+                        if max == 0 || candidate_tokens <= max {
+                            record_event(CountSite::MergeExactAccept, candidate_len);
+                            merged = Some((
+                                candidate_tokens.saturating_sub(ctx_t),
+                                Some(candidate_tokens),
+                                0,
+                            ));
+                        } else {
+                            record_event(CountSite::MergeExactReject, candidate_len);
                         }
                     }
-                } else {
-                    // Unlimited-token mode skips the estimate but still needs exact counts
-                    // to maintain the pending token metadata.
-                    record_event(CountSite::MergeFastDisabled, candidate_len);
-                }
 
-                // Fast path: append directly to the existing pending String.
-                if let Some((tokens, exact_total, joins)) = fast_merge {
-                    if !carry_prefix {
-                        record_event(
-                            CountSite::MergeFastDirect,
-                            b.sep_before.len().saturating_add(b.text.len()),
-                        );
+                    if let Some((tokens, exact_total, joins)) = merged {
                         if let Some(p) = self.pending.as_mut() {
-                            p.text
-                                .reserve(b.sep_before.len().saturating_add(b.text.len()));
-                            p.text.push_str(&b.sep_before);
-                            p.text.push_str(&b.text);
+                            if section_changed && !p.prefix.is_empty() {
+                                p.start_byte = p.prefix_start_byte;
+                                p.start_char = p.prefix_start_char;
+                                p.prefix.clear();
+                            }
+
+                            p.text = candidate;
                             p.tokens = tokens;
                             p.exact_total = exact_total;
                             p.joins = joins;
@@ -744,109 +933,27 @@ impl SmartChunker {
 
                         return Ok(());
                     }
-
-                    // The estimate succeeded, but the deferred heading prefix must be
-                    // materialized into a candidate before the pending state can be updated.
-                    record_event(CountSite::MergeFastPrefix, candidate_len);
                 }
-
-                // Exact-count path: retain the original candidate construction.
-                let mut candidate = String::with_capacity(candidate_len);
-
-                if section_changed {
-                    candidate.push_str(&p.prefix);
-                }
-
-                candidate.push_str(&p.text);
-                candidate.push_str(&b.sep_before);
-                candidate.push_str(&b.text);
-
-                let mut merged = fast_merge;
-
-                if merged.is_none() {
-                    record_event(CountSite::MergeExactFallback, candidate_len);
-                    let candidate_tokens =
-                        self.count_delivered_at(&common, &candidate, CountSite::MergeCandidate);
-
-                    // Compare the pre-margin estimate with the exact delivered-token count.
-                    // These diagnostics run only in stats builds and do not affect decisions.
-                    #[cfg(feature = "stats")]
-                    if let Some(base_estimate) = rejected_base_estimate {
-                        let delta_site = if base_estimate < candidate_tokens {
-                            match candidate_tokens - base_estimate {
-                                1 => CountSite::MergeEstimateUnder1,
-                                _ => CountSite::MergeEstimateUnder2Plus,
-                            }
-                        } else {
-                            match base_estimate - candidate_tokens {
-                                0 => CountSite::MergeEstimateEqual,
-                                1 => CountSite::MergeEstimateOver1,
-                                2 => CountSite::MergeEstimateOver2,
-                                3 => CountSite::MergeEstimateOver3,
-                                _ => CountSite::MergeEstimateOver4Plus,
-                            }
-                        };
-                        record_event(delta_site, candidate_len);
-
-                        // Retrospective simulation: would +1 / +0 have passed the
-                        // estimate gate, and if so, would that have accepted an
-                        // actually-over-budget candidate?
-                        if base_estimate.saturating_add(1) <= max {
-                            record_event(CountSite::MergeMargin1WouldAccept, candidate_len);
-                            if candidate_tokens > max {
-                                record_event(CountSite::MergeMargin1Unsafe, candidate_len);
-                            }
-                        }
-                        if base_estimate <= max {
-                            record_event(CountSite::MergeMargin0WouldAccept, candidate_len);
-                            if candidate_tokens > max {
-                                record_event(CountSite::MergeMargin0Unsafe, candidate_len);
-                            }
-                        }
-                    }
-
-                    if max == 0 || candidate_tokens <= max {
-                        record_event(CountSite::MergeExactAccept, candidate_len);
-                        merged = Some((
-                            candidate_tokens.saturating_sub(ctx_t),
-                            Some(candidate_tokens),
-                            0,
-                        ));
-                    } else {
-                        record_event(CountSite::MergeExactReject, candidate_len);
-                    }
-                }
-
-                if let Some((tokens, exact_total, joins)) = merged {
-                    if let Some(p) = self.pending.as_mut() {
-                        if section_changed && !p.prefix.is_empty() {
-                            p.start_byte = p.prefix_start_byte;
-                            p.start_char = p.prefix_start_char;
-                            p.prefix.clear();
-                        }
-
-                        p.text = candidate;
-                        p.tokens = tokens;
-                        p.exact_total = exact_total;
-                        p.joins = joins;
-                        p.headers = common;
-
-                        self.peak_pending_bytes = self
-                            .peak_pending_bytes
-                            .max(p.text.len().saturating_add(p.prefix.len()));
-                    }
-
-                    return Ok(());
-                }
-              }
             }
         }
 
         // Keep a multi-paragraph list item together: move its already-pending part into a
         // fresh pending chunk and let this continuation block merge into it.
-        let b = match self.keep_list_item_together(b, out)? {
+        let mut b = match self.keep_list_item_together(b, out)? {
             Some(b) => b,
             None => return Ok(()),
+        };
+
+        // Fill unused space from the next block, then process its remainder normally.
+        let b_tokens = self.count_block_text(&b.text);
+        let filled = self.fill_pending_from_block(&mut b)?;
+        if b.text.trim().is_empty() {
+            return Ok(());
+        }
+        let b_tokens = if filled {
+            self.count_block_text(&b.text)
+        } else {
+            b_tokens
         };
 
         // The previous pending chunk did not fit with this block (or no pending chunk exists).

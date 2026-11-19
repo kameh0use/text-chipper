@@ -593,3 +593,231 @@ fn flat_mode_never_attaches_headers() {
         assert_eq!(c.contextualized_text(), c.text);
     }
 }
+
+// --------------------------------------------------------------------------- Backend::max_of
+
+fn third_of_chars() -> Arc<Backend> {
+    // Monotone on prefixes, and a different shape from BPE: dominates for plain ASCII prose
+    // while the BPE members dominate for CJK and emoji.
+    Backend::from_fn(|t| t.chars().count() / 3)
+}
+
+#[test]
+fn oversized_next_block_fills_pending_capacity_without_overflow() {
+    let backend = Backend::from_name("chars").unwrap();
+    let mut chunker = SmartChunker::new(cfg(100, 0, false), backend.clone());
+    let headers = Arc::new(Vec::new());
+    let first = "a".repeat(20);
+    let second = "bbbb.".repeat(44);
+    let mut out = Vec::new();
+    chunker
+        .handle_block(
+            Block {
+                text: first.clone(),
+                start_byte: 0,
+                start_char: 0,
+                sep_before: String::new(),
+                headers: Arc::clone(&headers),
+                is_code: false,
+            },
+            &mut out,
+        )
+        .unwrap();
+    chunker
+        .handle_block(
+            Block {
+                text: second.clone(),
+                start_byte: 22,
+                start_char: 22,
+                sep_before: "\n\n".to_string(),
+                headers,
+                is_code: false,
+            },
+            &mut out,
+        )
+        .unwrap();
+    chunker.finish(&mut out).unwrap();
+
+    assert!(
+        out[0].token_count >= 95,
+        "first chunk should reclaim pending capacity"
+    );
+    assert!(out[0].text.starts_with(&format!("{first}\n\n")));
+    assert!(out[0].text.trim_end().ends_with('.'));
+    assert!(out.iter().all(|c| backend.count(&c.text) <= 100));
+}
+
+#[test]
+fn residual_packing_preserves_code_block_that_fits_alone() {
+    let backend = Backend::from_name("chars").unwrap();
+    let mut chunker = SmartChunker::new(cfg(100, 0, false), backend);
+    let headers = Arc::new(Vec::new());
+    let first = "a".repeat(80);
+    let code = "```rust\nfn main() {}\n```";
+    let mut out = Vec::new();
+    chunker
+        .handle_block(
+            Block {
+                text: first.clone(),
+                start_byte: 0,
+                start_char: 0,
+                sep_before: String::new(),
+                headers: Arc::clone(&headers),
+                is_code: false,
+            },
+            &mut out,
+        )
+        .unwrap();
+    chunker
+        .handle_block(
+            Block {
+                text: code.to_string(),
+                start_byte: first.len() + 2,
+                start_char: first.len() + 2,
+                sep_before: "\n\n".to_string(),
+                headers,
+                is_code: true,
+            },
+            &mut out,
+        )
+        .unwrap();
+    chunker.finish(&mut out).unwrap();
+    assert_eq!(out.len(), 2);
+    assert_eq!(out[1].text, code);
+}
+
+#[test]
+fn residual_packing_can_split_a_small_block_at_a_sentence_end() {
+    let backend = Backend::from_name("chars").unwrap();
+    let mut chunker = SmartChunker::new(cfg(100, 0, false), backend.clone());
+    let headers = Arc::new(Vec::new());
+    let first = "a".repeat(50);
+    let second = "123456789012345. ".repeat(5);
+    let mut out = Vec::new();
+    chunker
+        .handle_block(
+            Block {
+                text: first.clone(),
+                start_byte: 0,
+                start_char: 0,
+                sep_before: String::new(),
+                headers: Arc::clone(&headers),
+                is_code: false,
+            },
+            &mut out,
+        )
+        .unwrap();
+    chunker
+        .handle_block(
+            Block {
+                text: second.clone(),
+                start_byte: first.len() + 2,
+                start_char: first.len() + 2,
+                sep_before: "\n\n".to_string(),
+                headers,
+                is_code: false,
+            },
+            &mut out,
+        )
+        .unwrap();
+    chunker.finish(&mut out).unwrap();
+
+    assert!(
+        out[0].token_count >= 80,
+        "expected the prior chunk's residual to be reclaimed"
+    );
+    assert!(out[0].text.trim_end().ends_with('.'));
+    assert!(out.iter().all(|c| backend.count(&c.text) <= 100));
+}
+
+#[test]
+fn max_of_counts_the_largest_member_and_adds_per_member_overhead() {
+    let cl = Backend::from_name("cl100k_base").unwrap();
+    let o2 = Backend::from_name("o200k_base").unwrap();
+    let third = third_of_chars();
+    let guard =
+        Backend::max_of(vec![Arc::clone(&cl), Arc::clone(&o2), Arc::clone(&third)]).unwrap();
+    let with_overhead =
+        Backend::max_of_with_overhead(vec![(Arc::clone(&cl), 0), (Arc::clone(&third), 2)]).unwrap();
+
+    assert_eq!(guard.count(""), 0);
+    assert_eq!(with_overhead.count(""), 0);
+
+    let samples = vec![
+        "Hello world".to_string(),
+        "東京 👩‍💻 café e\u{301} Καλημέρα".to_string(),
+        "abc ".repeat(50),
+        "日本語のテキスト。".repeat(40),
+    ];
+    for t in &samples {
+        let expected = cl.count(t).max(o2.count(t)).max(third.count(t));
+        assert_eq!(guard.count(t), expected, "max_of count for {t:?}");
+        let expected_overhead = cl.count(t).max(third.count(t) + 2);
+        assert_eq!(
+            with_overhead.count(t),
+            expected_overhead,
+            "overhead count for {t:?}"
+        );
+    }
+}
+
+#[test]
+fn max_of_single_member_is_returned_unchanged_and_empty_list_is_rejected() {
+    let cl = Backend::from_name("cl100k_base").unwrap();
+    let same = Backend::max_of(vec![Arc::clone(&cl)]).unwrap();
+    assert!(Arc::ptr_eq(&same, &cl));
+    assert!(matches!(
+        Backend::max_of(Vec::new()),
+        Err(ChipError::InvalidConfig(_))
+    ));
+    assert!(matches!(
+        Backend::max_of_with_overhead(Vec::new()),
+        Err(ChipError::InvalidConfig(_))
+    ));
+}
+
+#[test]
+fn max_of_additivity_follows_the_members() {
+    let cl = Backend::from_name("cl100k_base").unwrap();
+    let all_additive = Backend::max_of(vec![
+        Arc::clone(&cl),
+        Backend::from_name("o200k_base").unwrap(),
+    ])
+    .unwrap();
+    assert!(all_additive.joins_are_additive());
+    // A `from_fn` member keeps the default (not additive), so the combination is not either.
+    let mixed = Backend::max_of(vec![cl, third_of_chars()]).unwrap();
+    assert!(!mixed.joins_are_additive());
+}
+
+#[test]
+fn strict_chunks_from_a_max_of_backend_fit_every_member() {
+    let cl = Backend::from_name("cl100k_base").unwrap();
+    let o2 = Backend::from_name("o200k_base").unwrap();
+    let third = third_of_chars();
+    let guard =
+        Backend::max_of(vec![Arc::clone(&cl), Arc::clone(&o2), Arc::clone(&third)]).unwrap();
+
+    let texts = vec![
+        format!("# Heading\n\n{}", "Hello 👩‍👩‍👧‍👦 café 東京 é. ".repeat(300)),
+        format!(
+            "# Prose\n\n{}",
+            "The quick brown fox jumps over the lazy dog. ".repeat(200)
+        ),
+        "日本語のテキストを区切らずに並べます。".repeat(200),
+    ];
+    for text in &texts {
+        for (max, ov) in [(64usize, 0usize), (96, 16)] {
+            let chunks = smart_chunk(text, &cfg(max, ov, true), &guard).unwrap();
+            assert!(!chunks.is_empty());
+            for ch in &chunks {
+                let delivered = ch.contextualized_text();
+                for (name, member) in [("cl100k", &cl), ("o200k", &o2), ("chars/3", &third)] {
+                    let n = member.count(&delivered);
+                    assert!(n <= max, "{name} counts {n} > {max} for a guarded chunk");
+                }
+                assert_eq!(ch.token_count, guard.count(&delivered));
+            }
+        }
+    }
+}

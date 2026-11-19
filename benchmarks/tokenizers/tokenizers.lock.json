@@ -1,0 +1,20 @@
+{
+  "BGE": {
+    "repo": "BAAI/bge-large-en-v1.5",
+    "revision": "69e45f6c5f5c060777952fbe033783efb6849cc6",
+    "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66",
+    "vocab_size": 30522
+  },
+  "deepseek": {
+    "repo": "deepseek-ai/DeepSeek-V3",
+    "revision": "e815299b0bcbac849fa540c768ef21845365c9eb",
+    "sha256": "621ac2e32d0dba658404412318818aaa8ce8cda492e59830109d8da6b517fb41",
+    "vocab_size": 128815
+  },
+  "qwen": {
+    "repo": "Qwen/Qwen3-8B",
+    "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+    "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+    "vocab_size": 151669
+  }
+}

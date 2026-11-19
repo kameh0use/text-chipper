@@ -1,0 +1,15 @@
+feat: guard tokenizers and reclaim safe chunk capacity
+
+Add Backend::max_of and Backend::max_of_with_overhead (Rust) and the guard_encodings and
+guard_tokenizer_files arguments of TextChipper (Python). The combined counter reports the largest
+count over the primary tokenizer and every guard, so strict mode guarantees max_length for each of
+them. The maximum of monotone counters stays monotone, joins are additive only when every member's
+are, and the window search is seeded with the smallest bytes-per-token ratio.
+
+When adjacent text blocks do not fit together, reclaim unused chunk capacity from the next block
+at a sentence or line boundary. Recount the delivered text before accepting it; code blocks stay
+intact. On the pinned 12-workload guard benchmark this raised natural-workload mean fill from 80.3%
+to 87.1%, with zero overflow across seven tokenizers.
+
+The strict guarantee remains relative to the configured tokenizers; the README documents this
+limit and the cross-tokenizer benchmark. The crate version is not bumped here.

@@ -15,7 +15,9 @@ Built in Rust with Python bindings.**
 <br clear="left">
 
 - **Token-exact budget.** In the default strict mode every chunk is re-tokenized exactly as it
-  will be delivered (header context included), so `token_count <= max_length` always holds.
+  will be delivered (header context included), so `token_count <= max_length` always holds for the
+  tokenizer you configure, and with [guard tokenizers](#other-tokenizers-and-guards) for every
+  tokenizer you list.
 - **Structure-aware.** Text is divided at blank lines into blocks that are packed into chunks and
   split internally only when a block does not fit. Fenced code blocks and list items are kept
   intact when they fit, and headings become `headers` metadata for each chunk. See
@@ -349,7 +351,11 @@ Your counter must be:
 `false` the chunker keeps a safety slack when merging blocks. `initial_ratio` (bytes per token) only
 seeds the window search and affects speed, never correctness.
 
-The Python API does not accept a custom counter yet: use `encoding=` or `tokenizer_file=`.
+To combine several counters (yours and built-in ones) so that a chunk fits all of them, use
+`Backend::max_of` (see [Other tokenizers and guards](#other-tokenizers-and-guards)).
+
+The Python API does not accept a custom counter yet: use `encoding=` or `tokenizer_file=`, plus
+`guard_encodings=` / `guard_tokenizer_files=` for additional tokenizers.
 
 ## Markdown support and CommonMark conformance
 
@@ -423,6 +429,42 @@ CommonMark block structure, use a Markdown parser and chunk its output.
 Use strict mode whenever chunks are fed to an embedding model or a context window with a hard
 limit. Non-strict mode is a best-effort mode for cases where the budget is only a target.
 
+### Other tokenizers and guards
+
+The guarantee is relative to the tokenizer that counts. A chunk that is exactly 510 tokens for
+`cl100k_base` can be more for another model, because vocabularies differ. In a cross-tokenizer test
+(limit 512, budget 510, natural workloads, chunks made with `cl100k_base` and recounted with the
+consumer's tokenizer) the share of chunks above 512 was 0.1 % for `o200k_base`, 0.7 % for
+DeepSeek-V3, 10.5 % for BGE and 21.0 % for Qwen3, and the largest chunk reached 757 tokens under
+BGE. Every chunker we compared behaves this way; the only way to a budget that holds is to count with
+the tokenizer that will consume the text.
+
+If you know the consumer, configure it (`encoding=` or `tokenizer_file=`). If the same chunks feed
+several models, or you want to stay safe when the model changes, add **guard tokenizers**: the budget
+is then enforced on the largest count over the primary tokenizer and every guard, so strict mode
+guarantees `max_length` for each of them.
+
+```python
+chipper = TextChipper(
+    max_length=510,  # 512 minus the [CLS]/[SEP] that BGE adds around every input
+    overlap=0,
+    encoding="cl100k_base",
+    guard_encodings=["o200k_base"],
+    guard_tokenizer_files=["qwen3-tokenizer.json", "bge-large-en-v1.5-tokenizer.json"],  # `hf` build
+)
+```
+
+In Rust, `Backend::max_of(vec![...])` builds the same combined backend, and
+`Backend::max_of_with_overhead(vec![(backend, 2), ...])` adds a fixed per-tokenizer overhead (BOS,
+`[CLS]`/`[SEP]`) to that tokenizer's count.
+
+What this costs and what it does not cover:
+
+- Each guard adds one tokenizer pass, and chunks are sized by whichever tokenizer produces the most
+  tokens for a given text, so chunks get somewhat smaller (check `token_count` against your limit).
+- Only the listed tokenizers are covered. For an unknown tokenizer nothing can be guaranteed.
+- Special tokens a consumer adds are not counted in Python: lower `max_length` by that amount.
+
 
 ## ⚠️ Errors
 
@@ -441,6 +483,8 @@ input:
 ## Known limitations
 
 - Non-strict mode gives no budget guarantee (see above).
+- The strict guarantee holds for the configured tokenizer and its guards only; text counted by an
+  unlisted tokenizer can exceed the budget (see [Other tokenizers and guards](#other-tokenizers-and-guards)).
 - Flat mode reads whole files (32 MiB limit); streaming with bounded memory is only available
   with `include_context=True`.
 - Block recognition is limited to what [Markdown support](#markdown-support-and-commonmark-conformance)

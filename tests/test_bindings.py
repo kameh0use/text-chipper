@@ -273,3 +273,36 @@ def test_include_context_false_never_reports_headers():
     for c in chunks:
         assert list(c.headers) == []
         assert c.contextualized_text == c.text
+
+
+# --------------------------------------------------------------------------- guard tokenizers
+
+
+def test_guard_encodings_keep_every_chunk_within_every_tokenizer():
+    text = "Hello \U0001F469\u200d\U0001F4BB caf\u00e9 \u6771\u4eac text. " * 400
+    guarded = TextChipper(
+        max_length=64, overlap=0, include_context=False, guard_encodings=["o200k_base"]
+    )
+    assert guarded.encoding == "cl100k_base+o200k_base"
+    singles = [TextChipper(encoding=e) for e in ("cl100k_base", "o200k_base")]
+    chunks = guarded.chunk(text)
+    assert chunks
+    for c in chunks:
+        assert c.token_count <= 64
+        for single in singles:
+            assert single.count_tokens(c.text) <= 64
+
+
+def test_guard_encodings_never_produce_fewer_tokens_than_the_primary_alone():
+    # The guarded count is a maximum, so it can only be >= the primary tokenizer's own count.
+    text = "\u65e5\u672c\u8a9e\u306e\u30c6\u30ad\u30b9\u30c8\u3002" * 50
+    plain = TextChipper(encoding="cl100k_base")
+    guarded = TextChipper(encoding="cl100k_base", guard_encodings=["o200k_base"])
+    assert guarded.count_tokens(text) >= plain.count_tokens(text)
+
+
+def test_guard_arguments_are_validated():
+    with pytest.raises(ValueError):
+        TextChipper(guard_encodings=["no_such_encoding"])
+    with pytest.raises(TypeError):
+        TextChipper(guard_encodings="o200k_base")  # a bare string is not a list of names

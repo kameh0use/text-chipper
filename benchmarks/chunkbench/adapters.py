@@ -25,6 +25,11 @@ class Ctx:
     overlap: int
     fmt: str  # "plain" | "markdown"
     encoding: str = ENCODING
+    tokenizer_file: str | None = None
+    # text_chipper only: extra tokenizers the budget must also hold for (`guard_encodings=` and
+    # `guard_tokenizer_files=`); every other library ignores them.
+    guard_encodings: tuple[str, ...] = ()
+    guard_files: tuple[str, ...] = ()
 
 
 @dataclass
@@ -66,11 +71,18 @@ def _plain_views(raw: Any) -> list[View]:
 def _text_chipper(ctx: Ctx, include_context: bool) -> Runner:
     import text_chipper
 
+    guards: dict = {}
+    if ctx.guard_encodings:
+        guards["guard_encodings"] = list(ctx.guard_encodings)
+    if ctx.guard_files:
+        guards["guard_tokenizer_files"] = list(ctx.guard_files)
     chipper = text_chipper.TextChipper(
         max_length=ctx.chunk_size,
         overlap=ctx.overlap,
         encoding=ctx.encoding,
         include_context=include_context,
+        tokenizer_file=ctx.tokenizer_file,
+        **guards,  # only passed when a guard run asks for them, so older builds still work
     )
     return Runner(
         chipper.chunk,
@@ -82,6 +94,18 @@ def _text_chipper(ctx: Ctx, include_context: bool) -> Runner:
 
 
 def _tiktoken_window(ctx: Ctx) -> Runner:
+    if ctx.tokenizer_file:
+        from tokenizers import Tokenizer
+
+        enc = Tokenizer.from_file(ctx.tokenizer_file)
+        step = ctx.chunk_size - ctx.overlap
+
+        def run_hf(text: str) -> list[str]:
+            ids = enc.encode(text, add_special_tokens=False).ids
+            return [enc.decode(ids[i : i + ctx.chunk_size], skip_special_tokens=False) for i in range(0, len(ids), step)]
+
+        return Runner(run_hf, _plain_views)
+
     import tiktoken
 
     enc = tiktoken.get_encoding(ctx.encoding)
@@ -98,6 +122,10 @@ def _tiktoken_window(ctx: Ctx) -> Runner:
 
 
 def _chonkie_tokenizer(ctx: Ctx):
+    if ctx.tokenizer_file:
+        from tokenizers import Tokenizer
+
+        return Tokenizer.from_file(ctx.tokenizer_file)
     import tiktoken
 
     return tiktoken.get_encoding(ctx.encoding)
@@ -137,8 +165,12 @@ def _semantic_text_splitter(ctx: Ctx) -> Runner:
     import semantic_text_splitter as sts
 
     cls = sts.MarkdownSplitter if ctx.fmt == "markdown" else sts.TextSplitter
-    # "gpt-4" resolves to cl100k_base inside tiktoken-rs.
-    splitter = cls.from_tiktoken_model("gpt-4", ctx.chunk_size, overlap=ctx.overlap)
+    if ctx.tokenizer_file:
+        splitter = cls.from_huggingface_tokenizer_file(ctx.tokenizer_file, ctx.chunk_size, overlap=ctx.overlap)
+    else:
+        # "gpt-4" resolves to cl100k_base inside tiktoken-rs.
+        model = "gpt-4o" if ctx.encoding == "o200k_base" else "gpt-4"
+        splitter = cls.from_tiktoken_model(model, ctx.chunk_size, overlap=ctx.overlap)
     return Runner(splitter.chunks, _plain_views)
 
 
@@ -147,11 +179,17 @@ def _semantic_text_splitter(ctx: Ctx) -> Runner:
 
 def _semchunk(ctx: Ctx) -> Runner:
     import semchunk
-    import tiktoken
+    if ctx.tokenizer_file:
+        from tokenizers import Tokenizer
 
+        tokenizer = Tokenizer.from_file(ctx.tokenizer_file)
+    else:
+        import tiktoken
+
+        tokenizer = tiktoken.get_encoding(ctx.encoding)
     # Default settings, including its own token-count memoisation (memoize=True). That cache is
     # per chunker object, so the cold mode (a fresh process per sample) is the fair way to time it.
-    chunker = semchunk.chunkerify(tiktoken.get_encoding(ctx.encoding), ctx.chunk_size)
+    chunker = semchunk.chunkerify(tokenizer, ctx.chunk_size)
     overlap = ctx.overlap or None  # semchunk: >= 1 means an absolute number of tokens
 
     def run(text: str) -> list[str]:
@@ -167,12 +205,21 @@ def _langchain(ctx: Ctx) -> Runner:
     from langchain_text_splitters import MarkdownTextSplitter, RecursiveCharacterTextSplitter
 
     cls = MarkdownTextSplitter if ctx.fmt == "markdown" else RecursiveCharacterTextSplitter
-    splitter = cls.from_tiktoken_encoder(
-        encoding_name=ctx.encoding,
-        chunk_size=ctx.chunk_size,
-        chunk_overlap=ctx.overlap,
-        disallowed_special=(),
-    )
+    if ctx.tokenizer_file:
+        from transformers import PreTrainedTokenizerFast
+
+        splitter = cls.from_huggingface_tokenizer(
+            PreTrainedTokenizerFast(tokenizer_file=ctx.tokenizer_file),
+            chunk_size=ctx.chunk_size,
+            chunk_overlap=ctx.overlap,
+        )
+    else:
+        splitter = cls.from_tiktoken_encoder(
+            encoding_name=ctx.encoding,
+            chunk_size=ctx.chunk_size,
+            chunk_overlap=ctx.overlap,
+            disallowed_special=(),
+        )
     return Runner(splitter.split_text, _plain_views)
 
 

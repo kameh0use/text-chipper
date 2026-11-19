@@ -119,6 +119,32 @@ python benchmarks/before_after_readme.py README.md --max-tokens 256 --out report
 
 Fence detection checks the chunk body. A chunk entirely inside a code block with no fence marker is not flagged.
 
+## Cross-tokenizer matrix
+
+[`cross_tokenizer.py`](cross_tokenizer.py) chunks every workload with tokenizer **A** and recounts the delivered text with
+tokenizer **B**, for every pair of `cl100k_base`, `o200k_base`, `p50k_base`, `r50k_base`, Llama 3, Llama 4, Qwen, DeepSeek and BGE
+(plus Claude as a consumer-only column, via Anthropic's token-counting API on a seeded sample of chunks).
+
+```bash
+export HF_TOKEN=...            # Llama repos are gated: accept the licence on huggingface.co first
+export ANTHROPIC_API_KEY=...   # optional: Claude columns (claude-sonnet-5-5 by default, see --claude-models)
+python benchmarks/cross_tokenizer.py                      # budget = limit - headroom = 510 for a 512 limit
+python benchmarks/cross_tokenizer.py --headroom 0         # budget == limit: reproduces the first (BGE [CLS]/[SEP]) result
+python benchmarks/cross_tokenizer.py --tokenizers cl100k_base o200k_base BGE --no-claude   # quick subset
+python benchmarks/cross_tokenizer.py --guard              # adds the `guard` row (see below)
+```
+
+Tokenizer files are pinned in [`tokenizers/tokenizers.lock.json`](tokenizers/tokenizers.lock.json). The first run of a new
+tokenizer records its commit and SHA-256 (trust on first use) and says so in the report; commit the lock file with the
+results. Output goes to `cross_tokenizer_results/matrix/` (`report.md`, `results.json`, `rows.csv`).
+Self-tests: `pytest benchmarks/tests/test_crosstok.py`.
+
+**Guard row.** With `--guard`, `text_chipper` and `text_chipper (flat)` get one extra chunker row, `guard`: the chunker is built
+with `guard_encodings` / `guard_tokenizer_files` covering every loaded tokenizer, so its budget is enforced on the largest count
+over all of them. Strict mode then guarantees the budget for each of those tokenizers, which the report checks (section 3b:
+overflow, worst chunk and median fill, so the cost of guarding is visible). Claude is counted by an API, cannot be a guard member
+and stays outside the guarantee. This needs a `text_chipper` build with guard support (`maturin develop --release --features python,hf`).
+
 ## Install footprint
 
 Dependencies, installed size and startup time were measured separately (macOS arm64, Python 3.15, one measurement per

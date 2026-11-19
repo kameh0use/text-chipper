@@ -32,3 +32,7 @@ build/
 # macOS
 .DS_Store
 benchmarks/results/*/_cache/
+/benchmarks/cross_tokenizer_ci_results/
+# Downloaded tokenizer files are fetched on demand; the lock file (hashes) is committed.
+/benchmarks/tokenizers/*.json
+!/benchmarks/tokenizers/tokenizers.lock.json
