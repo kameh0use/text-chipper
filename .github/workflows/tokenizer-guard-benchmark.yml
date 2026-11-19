@@ -3,6 +3,18 @@ name: Tokenizer budget guarantee
 on:
   push:
     branches: [tokenizer-box]
+    paths:
+      - .github/workflows/tokenizer-guard-benchmark.yml
+      - Cargo.toml
+      - Cargo.lock
+      - pyproject.toml
+      - src/**
+      - benchmarks/cross_tokenizer.py
+      - benchmarks/chunkbench/**
+      - benchmarks/requirements.txt
+      - benchmarks/tests/test_crosstok.py
+      - benchmarks/tokenizers/tokenizers.lock.json
+      - benchmarks/corpora.lock.json
   workflow_dispatch:
     inputs:
       size_mib:

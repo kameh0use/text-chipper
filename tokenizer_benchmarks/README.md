@@ -17,10 +17,11 @@ The reference run used a 512-token consumer limit and a 510-token chunk budget, 
 
 The updated strategy fills a pending chunk from the next text block when the added prefix reaches a sentence or line boundary. It recounts the exact delivered candidate before accepting it. Code blocks remain intact. Markdown fence integrity remained 100% in both runs.
 
-The numbers above come from the local reference reports below. The GitHub Actions workflow repeats the acceptance benchmark on a GitHub-hosted runner and uploads its report as an artifact; runner results can vary slightly with platform and dependency versions.
+The baseline is the local reference run; the updated result is from a GitHub-hosted Linux runner. The workflow uploads later runs as artifacts without committing generated files automatically.
 
 - [Previous fill strategy](results/fill-baseline/report.md)
 - [Clean-boundary fill](results/fill-clean-boundary/report.md)
+- [GitHub Actions run 44538546894](results/github-actions-44538546894/report.md)
 - [Benchmark workflow](../.github/workflows/tokenizer-guard-benchmark.yml)
 
 ## Run locally
