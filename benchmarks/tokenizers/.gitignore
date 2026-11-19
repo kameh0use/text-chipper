@@ -1,0 +1,2 @@
+# Gated / licensed tokenizer files are downloaded on demand; commit tokenizers.lock.json, not the files.
+llama*-tokenizer.json

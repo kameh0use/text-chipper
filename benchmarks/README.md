@@ -27,26 +27,6 @@ five cold runs on a GitHub Actions runner (AMD EPYC 9V45, 4 logical CPUs, Python
 metrics and limitations. Lanes: `single` pins the process to one CPU and sets thread variables to 1; `all` applies no
 restriction. The README summary charts use the `single` lane.
 
-### Latest 12-workload results
-
-The [per-workload report](results/20261117_133546/report.md) and [raw results](results/20261117_133546/results.json) include every library and metric. The run covers:
-
-- **Synthetic:** `prose_en`, `markdown_doc`, `code_heavy`, `multilingual`
-- **Real-world:** `real_pubmed`, `real_wikitexts`, `real_finance`, `real_chatlogs`, `real_state_of_the_union`
-- **Stress:** `stress_single_line`, `stress_cjk_unbroken`, `stress_giant_list`
-
-| Measure | 17 November result |
-| --- | --- |
-| Throughput | 37.1 MiB/s geometric mean; fastest on 10 of 12 workloads |
-| Chunks over 512 tokens | text_chipper: 0; LangChain: 15 (maximum 514); tiktoken window and Chonkie TokenChunker: 18 each (maximum 513) |
-| Mid-word cuts | text_chipper: 1 in 1,259 measured cut points (`stress_giant_list`); none in the other 11 workloads |
-
-**Why Chonkie’s reported count can differ (v1.7.0):** `TokenChunker` stores the size of each token-ID window, then decodes each window independently. If a boundary splits a multi-byte UTF-8 character, tiktoken’s default replacement decoding can emit `U+FFFD`; re-encoding the returned text may therefore exceed the stored window count, and the original character is not preserved. See [Chonkie’s token-window implementation](https://github.com/feyninc/chonkie/blob/v1.7.0/src/chonkie/chunker/token.py#L855-L870) and [tiktoken’s decode behavior](https://github.com/openai/tiktoken/blob/main/tiktoken/core.py#L1476-L1511). This explains how a 512-ID window can yield 513 tokens when the returned text is recounted. It does not confirm that every Chonkie overflow in this benchmark has this cause; that requires checking the affected chunks for `U+FFFD`.
-
-
-
-
-
 The reports separate two coverage measures. **Body coverage** is the share of non-whitespace source characters found
 verbatim in chunk bodies. **Content + heading metadata coverage** additionally counts recognized Markdown heading
 lines when their titles are carried in a chunk's `headers`. The second measure evaluates the text content the chunker
@@ -138,6 +118,32 @@ python benchmarks/before_after_readme.py README.md --max-tokens 256 --out report
 ```
 
 Fence detection checks the chunk body. A chunk entirely inside a code block with no fence marker is not flagged.
+
+## Cross-tokenizer matrix
+
+[`cross_tokenizer.py`](cross_tokenizer.py) chunks every workload with tokenizer **A** and recounts the delivered text with
+tokenizer **B**, for every pair of `cl100k_base`, `o200k_base`, `p50k_base`, `r50k_base`, Llama 3, Llama 4, Qwen, DeepSeek and BGE
+(plus Claude as a consumer-only column, via Anthropic's token-counting API on a seeded sample of chunks).
+
+```bash
+export HF_TOKEN=...            # Llama repos are gated: accept the licence on huggingface.co first
+export ANTHROPIC_API_KEY=...   # optional: Claude columns (claude-sonnet-5-5 by default, see --claude-models)
+python benchmarks/cross_tokenizer.py                      # budget = limit - headroom = 510 for a 512 limit
+python benchmarks/cross_tokenizer.py --headroom 0         # budget == limit: reproduces the first (BGE [CLS]/[SEP]) result
+python benchmarks/cross_tokenizer.py --tokenizers cl100k_base o200k_base BGE --no-claude   # quick subset
+python benchmarks/cross_tokenizer.py --guard              # adds the `guard` row (see below)
+```
+
+Tokenizer files are pinned in [`tokenizers/tokenizers.lock.json`](tokenizers/tokenizers.lock.json). The first run of a new
+tokenizer records its commit and SHA-256 (trust on first use) and says so in the report; commit the lock file with the
+results. Output goes to `cross_tokenizer_results/matrix/` (`report.md`, `results.json`, `rows.csv`).
+Self-tests: `pytest benchmarks/tests/test_crosstok.py`.
+
+**Guard row.** With `--guard`, `text_chipper` and `text_chipper (flat)` get one extra chunker row, `guard`: the chunker is built
+with `guard_encodings` / `guard_tokenizer_files` covering every loaded tokenizer, so its budget is enforced on the largest count
+over all of them. Strict mode then guarantees the budget for each of those tokenizers, which the report checks (section 3b:
+overflow, worst chunk and median fill, so the cost of guarding is visible). Claude is counted by an API, cannot be a guard member
+and stays outside the guarantee. This needs a `text_chipper` build with guard support (`maturin develop --release --features python,hf`).
 
 ## Install footprint
 

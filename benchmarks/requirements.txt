@@ -9,4 +9,9 @@ psutil>=5.9
 matplotlib>=3.8
 pytest>=8
 semchunk>=4.1.0
+tokenizers>=0.20
+transformers>=4.44,<5
 # text_chipper itself: from the repository root run `maturin develop --release`.
+# cross_tokenizer.py (tokenizer matrix): Hugging Face downloads; anthropic only for the Claude columns.
+huggingface_hub>=0.24
+anthropic>=0.40

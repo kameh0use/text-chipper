@@ -542,6 +542,30 @@ fn find_cuts(t: &str, a: usize, b: usize, level: u8) -> Vec<usize> {
     cuts
 }
 
+/// Candidate offsets at clean sentence or line boundaries for residual block filling.
+/// Unlike `split_by_tokens_with_lists_known`, this only scans the existing text once and does
+/// not atomize or pack the rest of the block.
+pub(crate) fn clean_fill_boundaries(text: &str) -> Vec<usize> {
+    if text.is_empty() {
+        return Vec::new();
+    }
+    let end = text.len();
+    let mut cuts = find_cuts(text, 0, end, R_LINE);
+    // The boundary immediately before a newline is clean too: leave the newline at the start
+    // of the remaining block, matching `fill_pending_from_block`'s previous check.
+    cuts.extend(
+        text.as_bytes()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &byte)| (byte == b'\n' && i > 0).then_some(i)),
+    );
+    cuts.extend(find_cuts(text, 0, end, R_SENT));
+    cuts.sort_unstable();
+    cuts.dedup();
+    cuts.retain(|&cut| cut > 0 && cut < end);
+    cuts
+}
+
 struct Splitter<'a> {
     text: &'a str,
     backend: &'a Backend,

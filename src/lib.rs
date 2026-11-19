@@ -15,6 +15,11 @@
 //! * `strict = true` (default): every chunk is re-tokenized exactly as it will be delivered
 //!   (context prefix included) and `token_count` is exact. If a single grapheme cluster alone
 //!   exceeds the budget, chunking fails with [`ChipError::ChunkTooLarge`].
+//!   The guarantee is relative to the tokenizer the backend counts with. Text counted by a
+//!   *different* tokenizer can exceed the budget (a `cl100k_base` chunk of 510 tokens may be
+//!   650 tokens for Qwen). To cover several tokenizers at once, build the backend with
+//!   [`Backend::max_of`] / [`Backend::max_of_with_overhead`]: the combined count is the
+//!   largest member count, so every chunk fits every member.
 //! * `strict = false`: that final exact check is skipped. This is faster, but there is no
 //!   guarantee that every chunk fits, and `token_count` may be an estimate. An unsplittable
 //!   grapheme cluster larger than the budget is emitted as its own chunk instead of an error.

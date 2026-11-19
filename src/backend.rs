@@ -248,10 +248,56 @@ pub trait Tokenizer: Send + Sync {
         false
     }
 
+    /// Is this counter the element-wise maximum of several tokenizers?
+    /// Multi-tokenizer guards enable the optional cross-block residual fill path.
+    fn is_guard(&self) -> bool {
+        false
+    }
+
     /// Rough bytes-per-token guess, used only to seed the window search. It affects speed,
     /// never correctness.
     fn initial_ratio(&self) -> f64 {
         4.0
+    }
+}
+
+/// Counts with several backends at once and reports the **largest** count.
+///
+/// A chunk whose max-count fits the budget fits under every member, which is what lets strict
+/// mode promise the budget for a whole set of tokenizers instead of just one. The maximum of
+/// monotone counters is monotone, so the window search keeps working. Each member may carry a
+/// fixed overhead (for example the `[CLS]`/`[SEP]` pair a BERT-style embedder adds around every
+/// input); the overhead is added to that member's count before the maximum is taken.
+struct MaxTokenizer {
+    parts: Vec<(Arc<Backend>, usize)>,
+}
+
+impl Tokenizer for MaxTokenizer {
+    fn count_tokens(&self, text: &str) -> usize {
+        self.parts
+            .iter()
+            .map(|(backend, overhead)| backend.count(text).saturating_add(*overhead))
+            .max()
+            .unwrap_or(0)
+    }
+
+    // `max_i(x_i + y_i + z_i) <= max_i(x_i) + max_i(y_i) + max_i(z_i)`, so the maximum is
+    // additive whenever every member is (a fixed per-member overhead only helps: it is added
+    // once on the left and once per piece on the right).
+    fn joins_are_additive(&self) -> bool {
+        self.parts.iter().all(|(backend, _)| backend.joins_are_additive())
+    }
+
+    // Fewer bytes per token means more tokens, so the smallest ratio is the binding one.
+    fn initial_ratio(&self) -> f64 {
+        self.parts
+            .iter()
+            .map(|(backend, _)| backend.initial_ratio())
+            .fold(f64::INFINITY, f64::min)
+    }
+
+    fn is_guard(&self) -> bool {
+        true
     }
 }
 
@@ -277,6 +323,10 @@ fn cache() -> &'static Mutex<HashMap<String, Arc<Backend>>> {
 }
 
 impl Backend {
+    pub(crate) fn is_guarded(&self) -> bool {
+        matches!(self, Backend::Custom(tokenizer) if tokenizer.is_guard())
+    }
+
     pub fn from_name(name: &str) -> Result<Arc<Backend>, ChipError> {
         let key = name.to_ascii_lowercase();
         // Short critical section: never build the (slow) BPE while holding the lock.
@@ -318,6 +368,40 @@ impl Backend {
             }
         }
         Arc::new(Backend::Custom(Arc::new(FnTokenizer(f))))
+    }
+
+    /// Build a backend whose count is the **maximum** over several backends.
+    ///
+    /// Chunks produced with it fit the budget under every listed tokenizer at once (strict
+    /// mode re-counts each delivered chunk with this combined counter). Use it when the
+    /// consumer is not known in advance or when the same chunks feed several models. The cost
+    /// is one tokenizer pass per member, and chunks are sized by the member that produces the
+    /// most tokens for a given text. A single member is returned as is.
+    ///
+    /// Returns [`ChipError::InvalidConfig`] for an empty list.
+    pub fn max_of(parts: Vec<Arc<Backend>>) -> Result<Arc<Backend>, ChipError> {
+        Self::max_of_with_overhead(parts.into_iter().map(|backend| (backend, 0)).collect())
+    }
+
+    /// Like [`Backend::max_of`], with a fixed number of extra tokens per member that the
+    /// consumer adds around every input (e.g. `2` for a BERT-style `[CLS]`/`[SEP]` pair, `1`
+    /// for a BOS token). The overhead is included in every count, so `token_count` reports
+    /// what the most demanding consumer will see.
+    pub fn max_of_with_overhead(
+        parts: Vec<(Arc<Backend>, usize)>,
+    ) -> Result<Arc<Backend>, ChipError> {
+        let mut parts = parts;
+        if parts.is_empty() {
+            return Err(ChipError::InvalidConfig(
+                "max_of needs at least one tokenizer".to_string(),
+            ));
+        }
+        if parts.len() == 1 && parts[0].1 == 0 {
+            if let Some((only, _)) = parts.pop() {
+                return Ok(only);
+            }
+        }
+        Ok(Arc::new(Backend::Custom(Arc::new(MaxTokenizer { parts }))))
     }
 
     #[cfg(feature = "hf")]
