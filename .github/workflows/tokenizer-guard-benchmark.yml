@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      SIZE_MIB: ${{ inputs.size_mib }}
-      INCLUDE_REAL: ${{ inputs.include_real }}
+      SIZE_MIB: ${{ inputs.size_mib || '0.05' }}
+      INCLUDE_REAL: ${{ github.event_name == 'push' || inputs.include_real }}
     steps:
       - uses: actions/checkout@v7
 
@@ -47,14 +47,14 @@ jobs:
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           python -m pip install --upgrade pip maturin
           python -m pip install "tiktoken==0.14.0" "tokenizers==0.23.3" "numpy>=1.26" \
-            "huggingface_hub>=0.24" "pytest>=8"
+            "huggingface_hub>=0.24" "pytest>=8" "matplotlib>=3.8"
           maturin develop --release --features python,hf
 
       - name: Test the benchmark harness
         run: python -m pytest benchmarks/tests -q
 
       - name: Fetch pinned real-world corpora
-        if: ${{ inputs.include_real }}
+        if: ${{ github.event_name == 'push' || inputs.include_real }}
         working-directory: benchmarks
         run: python -m chunkbench fetch
 
