@@ -41,6 +41,10 @@ jobs:
 
       - name: Install the tokenizer benchmark dependencies
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           python -m pip install --upgrade pip maturin
           python -m pip install "tiktoken==0.14.0" "tokenizers==0.23.3" "numpy>=1.26" \
             "huggingface_hub>=0.24" "pytest>=8"
