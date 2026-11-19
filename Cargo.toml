@@ -1,6 +1,6 @@
 [package]
 name = "text_chipper"
-version = "0.2.4"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.88.0"
 description = "Token-budgeted, Markdown-aware text chunking for RAG and LLM pipelines, with pluggable tokenizers and Python bindings."
@@ -12,7 +12,7 @@ repository = "https://github.com/kameh0use/text-chipper"
 homepage = "https://github.com/kameh0use/text-chipper"
 documentation = "https://docs.rs/text_chipper"
 # Keep the crates.io package small (benchmark results, plots and scripts stay out of it).
-include = ["/src/**", "/benches/**", "/tests/fixtures/**", "/Cargo.toml", "/README.md", "/LICENSE", "!.DS_Store"]
+include = ["/src/**", "/benches/**", "/tests/fixtures/**", "/tokenizer-guard/README.md", "/Cargo.toml", "/README.md", "/LICENSE", "!.DS_Store"]
 
 [lib]
 name = "text_chipper"

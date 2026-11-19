@@ -2,7 +2,8 @@
 
 Tokenizer guard is an opt-in mode for chunks that will be consumed by more than one tokenizer. Add
 the extra tokenizers to `guard_encodings` and/or `guard_tokenizer_files`; the primary tokenizer still
-comes from `encoding` or `tokenizer_file`.
+comes from `encoding` or `tokenizer_file`. PyPI wheels include Hugging Face tokenizer support;
+source builds need the `hf` feature.
 
 ```python
 from text_chipper import TextChipper
@@ -18,7 +19,7 @@ chunks = chipper.chunk(text)
 Every chunk is sized against the highest token count returned by the primary tokenizer and all
 listed guards. In this example the configured set is `o200k_base` + BGE, so those chunks fit both.
 An unlisted tokenizer is not covered. To cover several consumers, list each one as a guard. For
-Hugging Face tokenizers, build with the `hf` feature and provide local `tokenizer.json` files.
+Hugging Face tokenizers, provide local `tokenizer.json` files.
 
 ## Behavior
 

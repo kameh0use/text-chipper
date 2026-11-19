@@ -1,0 +1,19 @@
+text-chipper 1.0.0 — 2026-11-19
+
+The first stable release adds opt-in tokenizer guards for applications that send chunks to multiple
+models. Configure guard_encodings and/or guard_tokenizer_files on TextChipper; chunk sizes are then
+bounded by the highest token count among the primary tokenizer and every listed guard. The guarantee
+covers only configured tokenizers. The tokenizer-guard/README.md guide explains configuration,
+special-token headroom, and the acceptance benchmark.
+
+Guard mode also enables clean-boundary residual fill. When adjacent text blocks do not fit together,
+the chunker scans sentence and line boundaries in the next block and recounts the exact candidate
+before accepting it. Code blocks remain intact. With no guards configured, the ordinary
+single-tokenizer path retains its prior behavior.
+
+Rust users can combine counters with Backend::max_of and add per-counter overhead with
+Backend::max_of_with_overhead. Python users can guard built-in encodings and Hugging Face
+tokenizer.json files; the PyPI wheels include Hugging Face support.
+
+Validation for this release: all 111 Rust unit tests and 33 benchmark-harness tests passed; the
+seven-tokenizer strict acceptance workflow reported zero guarded overflow across 12 workloads.

@@ -28,7 +28,7 @@ bench = ["tiktoken", "chonkie", "semantic-text-splitter", "langchain-text-splitt
 
 [tool.maturin]
 module-name = "text_chipper"
-features = ["python"]
+features = ["python", "hf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

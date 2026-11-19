@@ -96,7 +96,7 @@ The Rust crate is published on crates.io as `text_chipper` (with an underscore).
 package is separate and uses `pip install text-chipper` (with a hyphen). The Rust crate has no
 runtime dependency on Python or PyO3 and installs no global allocator by default. Optional Cargo
 features include `mimalloc` (global allocator), `hf` (Hugging Face `tokenizer.json` support), and
-`python` (the extension used for the PyPI wheel). See the
+`python` (the extension used for the PyPI wheel). PyPI wheels include both `python` and `hf`. See the
 [API documentation](https://docs.rs/text_chipper) for offsets, streaming (`FileChunker`) and
 custom tokenizers.
 
@@ -440,7 +440,7 @@ chipper = TextChipper(
     max_length=510,  # reserve two positions for BGE's [CLS] and [SEP] under a 512 limit
     encoding="cl100k_base",
     guard_encodings=["o200k_base"],
-    guard_tokenizer_files=["bge-large-en-v1.5-tokenizer.json"],  # requires the `hf` build
+    guard_tokenizer_files=["bge-large-en-v1.5-tokenizer.json"],  # included in PyPI wheels
 )
 ```
 
@@ -503,7 +503,7 @@ The long-running reports, stress tests and the release suite are compiled only w
 by name.
 
 Cargo features (none are on by default, so Rust users get a pure-Rust library): `python` (PyO3
-bindings; used by the PyPI wheel, implies `mimalloc`), `mimalloc` (opt-in global allocator), `hf` (Hugging Face tokenizers), `stats` (tokenizer-call
+bindings; used by the PyPI wheel, implies `mimalloc`), `mimalloc` (opt-in global allocator), `hf` (Hugging Face tokenizers; included in PyPI wheels), `stats` (tokenizer-call
 profiling, see `scripts/profile_tokenizer.py`), `diagnostics` (long-running diagnostic tests and the
 release suite).
 
