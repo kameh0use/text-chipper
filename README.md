@@ -1,6 +1,6 @@
 # text_chipper
 
-<img align="left" hspace="12" src="https://github.com/kameh0use/text-chipper/blob/main/docs/logo.svg" width="140" alt="text_chipper logo">
+<img align="left" hspace="12" src="https://raw.githubusercontent.com/kameh0use/text-chipper/main/docs/logo.png" width="140" alt="text_chipper logo">
 
 **High-performance, Markdown-aware, strictly budget-enforced text chunking for RAG and LLM pipelines.
 Built in Rust with Python bindings.**
@@ -219,14 +219,14 @@ Throughput averaged geometrically over the 12 workloads: text_chipper reaches **
 single-core lane. That is 2.4 times the throughput of a plain tiktoken window (15.5 MiB/s), and 3.9 to
 11.6 times the throughput of the other chunking libraries.
 
-![Bar chart: geometric-mean throughput of each library over all 12 workloads](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/charts/speed_overall_latest.png)
+![Bar chart: geometric-mean throughput of each library over all 12 workloads](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/speed_overall_latest.png)
 
 text_chipper is the fastest approach on 10 of 12 workloads. The exceptions are `stress_cjk_unbroken`,
 where the tiktoken window reaches 19.7 MiB/s against text_chipper's 16.0 MiB/s, and `real_chatlogs`,
 where text_chipper flat mode reaches 18.4 MiB/s against 16.1 MiB/s in the default mode. Results on small
 inputs have more timing noise, so treat close ratios as rough.
 
-![Heat map: MiB/s of each library on each workload](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/charts/speed_per_every_workload.png)
+![Heat map: MiB/s of each library on each workload](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/speed_per_every_workload.png)
 
 ### Memory
 
@@ -234,11 +234,11 @@ Peak memory of the whole Python process (including the interpreter and imported 
 averaged over the workloads. Mean process peaks range from 94 to 102 MB; the largest single-workload peak
 was 119 MB. text_chipper adds 1.7 MB on average while chunking; its largest measured increase is about 11.7 MB.
 
-![Bar chart: peak memory of the Python process per library, single core](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/charts/memory_single_core.png)
+![Bar chart: peak memory of the Python process per library, single core](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/memory_single_core.png)
 
 ### Chunk quality
 
-![Scorecard: token limit, words, source text and code fences per library, with speed](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/charts/quality_scorecard.png)
+![Scorecard: token limit, words, source text and code fences per library, with speed](https://raw.githubusercontent.com/kameh0use/text-chipper/main/main/benchmarks/charts/quality_scorecard.png)
 
 - **Token limit**: no text_chipper chunk exceeded 512 tokens on any workload. Across all workloads,
   LangChain had 15 over-limit chunks; the tiktoken window and chonkie TokenChunker had 18 each. Their
@@ -275,7 +275,7 @@ file. Memory is the increase in peak process memory after warm-up. Timings and m
 runs; the verification pass is reported separately. Raw results are in
 [`benchmarks/results/streaming_20261117/`](benchmarks/results/streaming_20261117/).
 
-![Bar chart: throughput of each library on a 514 MiB file, single-core lane](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/charts/streaming_speed_single.png)
+![Bar chart: throughput of each library on a 514 MiB file, single-core lane](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/streaming_speed_single.png)
 
 | Library | File given as | Time | MiB/s | Memory growth | Chunks over 512 tokens |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -288,7 +288,7 @@ runs; the verification pass is reported separately. Raw results are in
 | semchunk | 8 MiB blocks | 111 s | 4.6 | 3.3 GB | 0 |
 | semantic-text-splitter | 8 MiB blocks | 152 s | 3.4 | 87 MB | 0 |
 
-![Bar chart: memory growth of each library on a 514 MiB file, single-core lane](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/charts/streaming_memory_single.png)
+![Bar chart: memory growth of each library on a 514 MiB file, single-core lane](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/streaming_memory_single.png)
 
 - **Memory stays bounded while streaming.** The process grew by 56 MB on the 514 MiB file. Reading it
   into one string and calling `chunk()` grew by 4.6 GB. Verification hashes for `from_file_stream` and
