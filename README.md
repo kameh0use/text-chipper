@@ -108,10 +108,10 @@ screen):
 
 ![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](https://github.com/kameh0use/text-chipper/blob/main/docs/before_after.svg)
 
-Reproduce it with [`examples/before_after.py`](examples/before_after.py).
+Reproduce it with [`examples/before_after.py`](https://github.com/kameh0use/text-chipper/blob/main/examples/before_after.py).
 
 The same comparison on a real README excerpt: the fixed token window on the left, text-chipper
-on the right. [`benchmarks/before_after_readme.py`](benchmarks/before_after_readme.py) runs it on
+on the right. [`benchmarks/before_after_readme.py`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/before_after_readme.py) runs it on
 any Markdown file.
 
 ![The same README excerpt split two ways: the fixed token window cuts a code comment and an emoji heading; text-chipper keeps both whole](https://github.com/kameh0use/text-chipper/blob/main/docs/readme_before_after.svg)
@@ -161,7 +161,7 @@ the virtual environment minus an empty one (about ±1 MB). The last column uses 
 (`import`, loading `cl100k_base`, chunking a tiny text), so it includes each library's tokenizer; semchunk's
 own size does not include the tokenizer it needs. The first import after a fresh install took about 0.5 s on
 macOS once (probably the system checking the new binary); later imports took about 2 ms. Linux and Windows were
-not measured. How to reproduce: [`benchmarks/README.md`](benchmarks/README.md#install-footprint).
+not measured. How to reproduce: [`benchmarks/README.md`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/README.md#install-footprint).
 
 ---
 
@@ -211,7 +211,7 @@ langchain-text-splitters 1.1.3, semchunk 4.1.1, semantic-text-splitter 0.33.3 an
 `text_chipper` is the default Markdown-aware strict mode; `text_chipper (flat)` uses
 `include_context=False`. This is one run on a shared virtual machine, so treat ratios as indicative,
 especially on small inputs. The raw results, metric definitions and harness are in
-[`benchmarks/`](benchmarks/) and [`benchmarks/results/20261117_133546/`](benchmarks/results/20261117_133546/).
+[`benchmarks/`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/) and [`benchmarks/results/20261117_133546/`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/results/20261117_133546/).
 
 ### Speed
 
@@ -273,7 +273,7 @@ file with 512-token chunks, `cl100k_base` and no overlap. The 17 November run us
 with 4 logical CPUs and Python 3.12; this section reports its single-core lane. Time includes reading the
 file. Memory is the increase in peak process memory after warm-up. Timings and memory are medians of three
 runs; the verification pass is reported separately. Raw results are in
-[`benchmarks/results/streaming_20261117/`](benchmarks/results/streaming_20261117/).
+[`benchmarks/results/streaming_20261117/`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/results/streaming_20261117/).
 
 ![Bar chart: throughput of each library on a 514 MiB file, single-core lane](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/streaming_speed_single.png)
 
