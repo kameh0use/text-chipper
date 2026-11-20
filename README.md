@@ -238,7 +238,7 @@ was 119 MB. text_chipper adds 1.7 MB on average while chunking; its largest meas
 
 ### Chunk quality
 
-![Scorecard: token limit, words, source text and code fences per library, with speed](https://raw.githubusercontent.com/kameh0use/text-chipper/main/main/benchmarks/charts/quality_scorecard.png)
+![Scorecard: token limit, words, source text and code fences per library, with speed](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/quality_scorecard.png)
 
 - **Token limit**: no text_chipper chunk exceeded 512 tokens on any workload. Across all workloads,
   LangChain had 15 over-limit chunks; the tiktoken window and chonkie TokenChunker had 18 each. Their
