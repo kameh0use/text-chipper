@@ -106,7 +106,7 @@ A plain token window cuts wherever the budget ends. On Markdown, that can split 
 the middle of a line. Same input, same budget (`max_length = 62`, kept small so it fits on a
 screen):
 
-![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](https://raw.githubusercontent.com/kameh0use/text-chipper/main/docs/before_after.svg)
+![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](https://github.com/kameh0use/text-chipper/blob/main/docs/before_after.svg)
 
 Reproduce it with [`examples/before_after.py`](examples/before_after.py).
 
@@ -114,7 +114,7 @@ The same comparison on a real README excerpt: the fixed token window on the left
 on the right. [`benchmarks/before_after_readme.py`](benchmarks/before_after_readme.py) runs it on
 any Markdown file.
 
-![The same README excerpt split two ways: the fixed token window cuts a code comment and an emoji heading; text-chipper keeps both whole](https://raw.githubusercontent.com/kameh0use/text-chipper/main/docs/readme_before_after.svg)
+![The same README excerpt split two ways: the fixed token window cuts a code comment and an emoji heading; text-chipper keeps both whole](https://github.com/kameh0use/text-chipper/blob/main/docs/readme_before_after.svg)
 
 ---
 
