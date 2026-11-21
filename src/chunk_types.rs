@@ -180,6 +180,10 @@ pub struct Chunk {
     pub end_byte: usize,
     pub token_count: usize,
     pub headers: Arc<Vec<String>>,
+    /// Repeated Markdown table header + delimiter row when this chunk is a continuation slice
+    /// of a split table (`None` for non-table chunks or the opening chunk of a table whose
+    /// `text` already starts with the table header).
+    pub table_header: Option<Arc<str>>,
 }
 
 impl Chunk {
@@ -188,10 +192,11 @@ impl Chunk {
     }
 
     pub fn contextualized_text(&self) -> String {
-        if self.headers.is_empty() {
-            self.text.clone()
-        } else {
-            format!("{}{}", context_prefix(&self.headers), self.text)
+        match (self.headers.is_empty(), self.table_header.as_deref()) {
+            (true, None) => self.text.clone(),
+            (false, None) => format!("{}{}", context_prefix(&self.headers), self.text),
+            (true, Some(th)) => format!("{th}\n{}", self.text),
+            (false, Some(th)) => format!("{}{th}\n{}", context_prefix(&self.headers), self.text),
         }
     }
 }

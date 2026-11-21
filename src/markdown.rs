@@ -1540,3 +1540,249 @@ mod front_matter_and_setext_tests {
         assert_eq!(headers_of(&blocks[1]), vec!["Next"]);
     }
 }
+
+pub mod table_parser {
+    //! Lightweight, source-preserving structural scanner for GFM Markdown tables.
+    //!
+    //! Identifies a header row and matching delimiter row followed by one or more
+    //! pipe-delimited body rows outside fenced code blocks, preserving exact UTF-8
+    //! byte offsets.
+
+    /// Source range and header metadata for one recognized GFM table inside a block.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct TableBlock {
+        /// Byte offset where the table starts (start of the header row) in `source`.
+        pub start_byte: usize,
+        /// Byte offset where the table ends (end of the last body row, including newline) in `source`.
+        pub end_byte: usize,
+        /// Byte offset where the first body row starts (immediately after the delimiter row).
+        pub body_start_byte: usize,
+        /// The exact header + delimiter lines trimmed of trailing CR/LF.
+        pub header_text: String,
+        /// Byte offsets of the start of each body row relative to `source`.
+        pub row_starts: Vec<usize>,
+    }
+
+    fn split_unescaped_pipes(trimmed: &str) -> Vec<&str> {
+        let mut s = trimmed;
+        if let Some(rest) = s.strip_prefix('|') {
+            s = rest;
+        }
+        // Strip a trailing pipe only when it is not escaped (`\|`).
+        if s.ends_with('|') && !s.ends_with(r"\|") {
+            s = &s[..s.len() - 1];
+        }
+        let mut cells = Vec::new();
+        let bytes = s.as_bytes();
+        let mut start = 0usize;
+        let mut i = 0usize;
+        while i < bytes.len() {
+            if bytes[i] == b'\\' && i + 1 < bytes.len() {
+                i += 2;
+                continue;
+            }
+            if bytes[i] == b'|' {
+                cells.push(&s[start..i]);
+                start = i + 1;
+            }
+            i += 1;
+        }
+        cells.push(&s[start..]);
+        cells
+    }
+
+    fn has_unescaped_pipe(s: &str) -> bool {
+        let bytes = s.as_bytes();
+        let mut i = 0usize;
+        while i < bytes.len() {
+            if bytes[i] == b'\\' && i + 1 < bytes.len() {
+                i += 2;
+                continue;
+            }
+            if bytes[i] == b'|' {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Return the number of columns if `line` can serve as a GFM table header or body row.
+    pub(crate) fn table_row_cells(line: &str) -> Option<usize> {
+        if crate::markdown::scanners::indent_width(line.as_bytes()) > 3 {
+            return None;
+        }
+        let trimmed = line.trim_matches([' ', '\t']);
+        if trimmed.is_empty()
+            || !has_unescaped_pipe(trimmed)
+            || crate::markdown::scanners::atx_heading(line).is_some()
+            || crate::markdown::scanners::opening_fence(line).is_some()
+        {
+            return None;
+        }
+        let cells = split_unescaped_pipes(trimmed);
+        if cells.is_empty() {
+            return None;
+        }
+        Some(cells.len())
+    }
+
+    /// Return the number of columns if `line` is a valid GFM table delimiter row (`| --- | :---: |`).
+    pub(crate) fn delimiter_row_cells(line: &str) -> Option<usize> {
+        if crate::markdown::scanners::indent_width(line.as_bytes()) > 3 {
+            return None;
+        }
+        let trimmed = line.trim_matches([' ', '\t']);
+        if trimmed.is_empty() || !has_unescaped_pipe(trimmed) {
+            return None;
+        }
+        let cells = split_unescaped_pipes(trimmed);
+        if cells.is_empty() {
+            return None;
+        }
+        for cell in &cells {
+            let c = cell.trim_matches([' ', '\t']);
+            if c.is_empty() {
+                return None;
+            }
+            let c = c.strip_prefix(':').unwrap_or(c);
+            let c = c.strip_suffix(':').unwrap_or(c);
+            if c.is_empty() || !c.bytes().all(|b| b == b'-') {
+                return None;
+            }
+        }
+        Some(cells.len())
+    }
+
+    /// Check whether `text` begins with a valid two-line GFM table header + delimiter.
+    pub(crate) fn starts_with_table(text: &str) -> bool {
+        let mut lines = text.lines();
+        let Some(first) = lines.next() else {
+            return false;
+        };
+        let Some(second) = lines.next() else {
+            return false;
+        };
+        let Some(h_cols) = table_row_cells(first) else {
+            return false;
+        };
+        delimiter_row_cells(second) == Some(h_cols)
+    }
+
+    /// Scan `source` for GFM tables that have at least one body row.
+    pub fn parse_tables(source: &str) -> Vec<TableBlock> {
+        let mut tables: Vec<TableBlock> = Vec::new();
+        let mut cur_table: Option<TableBlock> = None;
+        let mut pending_header: Option<(usize, usize)> = None;
+        let mut fence: Option<(char, usize)> = None;
+        let mut byte_offset = 0usize;
+
+        for raw_line in source.split_inclusive('\n') {
+            let content = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+            let content = content.strip_suffix('\r').unwrap_or(content);
+            let line_end = byte_offset + raw_line.len();
+
+            if let Some((fc, fl)) = fence {
+                if crate::markdown::scanners::closing_fence(content, fc, fl) {
+                    fence = None;
+                }
+                byte_offset = line_end;
+                continue;
+            }
+            if let Some(f) = crate::markdown::scanners::opening_fence(content) {
+                if let Some(t) = cur_table.take() {
+                    if !t.row_starts.is_empty() {
+                        tables.push(t);
+                    }
+                }
+                pending_header = None;
+                fence = Some(f);
+                byte_offset = line_end;
+                continue;
+            }
+
+            if let Some(t) = cur_table.as_mut() {
+                if table_row_cells(content).is_some() {
+                    t.row_starts.push(byte_offset);
+                    t.end_byte = line_end;
+                    byte_offset = line_end;
+                    continue;
+                }
+                let finished = cur_table.take().unwrap();
+                if !finished.row_starts.is_empty() {
+                    tables.push(finished);
+                }
+            }
+
+            if let Some((hdr_start, hdr_cols)) = pending_header {
+                if delimiter_row_cells(content) == Some(hdr_cols) {
+                    let header_text = source[hdr_start..line_end]
+                        .trim_end_matches(['\r', '\n'])
+                        .to_string();
+                    cur_table = Some(TableBlock {
+                        start_byte: hdr_start,
+                        end_byte: line_end,
+                        body_start_byte: line_end,
+                        header_text,
+                        row_starts: Vec::new(),
+                    });
+                    pending_header = None;
+                    byte_offset = line_end;
+                    continue;
+                }
+            }
+
+            pending_header = if delimiter_row_cells(content).is_some() {
+                None
+            } else {
+                table_row_cells(content).map(|cols| (byte_offset, cols))
+            };
+            byte_offset = line_end;
+        }
+
+        if let Some(t) = cur_table {
+            if !t.row_starts.is_empty() {
+                tables.push(t);
+            }
+        }
+        tables
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn recognizes_standard_and_outer_pipeless_gfm_tables() {
+            let src = "| Name | Score |\n| :--- | ---: |\n| Alice | 95 |\n| Bob | 88 |\n";
+            let tables = parse_tables(src);
+            assert_eq!(tables.len(), 1);
+            let t = &tables[0];
+            assert_eq!(t.start_byte, 0);
+            assert_eq!(t.end_byte, src.len());
+            assert_eq!(t.header_text, "| Name | Score |\n| :--- | ---: |");
+            assert_eq!(t.row_starts.len(), 2);
+            assert_eq!(&src[t.row_starts[0]..t.row_starts[1]], "| Alice | 95 |\n");
+            assert_eq!(&src[t.row_starts[1]..t.end_byte], "| Bob | 88 |\n");
+
+            let pipeless = "A | B\n--- | ---\n1 | 2\n";
+            let t2 = parse_tables(pipeless);
+            assert_eq!(t2.len(), 1);
+            assert_eq!(t2[0].header_text, "A | B\n--- | ---");
+        }
+
+        #[test]
+        fn handles_escaped_pipes_and_rejects_mismatched_columns() {
+            let escaped = r"| A \| B | C |
+| --- | --- |
+| 1 | 2 |
+";
+            let tables = parse_tables(escaped);
+            assert_eq!(tables.len(), 1);
+            assert_eq!(tables[0].row_starts.len(), 1);
+
+            let mismatched = "| A | B | C |\n| --- | --- |\n| 1 | 2 | 3 |\n";
+            assert!(parse_tables(mismatched).is_empty());
+        }
+    }
+}

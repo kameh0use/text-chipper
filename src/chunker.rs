@@ -199,12 +199,45 @@ impl SmartChunker {
 
     /// Count exactly what downstream embedding code receives, including context.
     fn count_delivered_at(&self, headers: &Headers, text: &str, site: CountSite) -> usize {
-        if self.cfg.include_context && !headers.is_empty() {
-            let mut full = context_prefix(headers);
-            full.push_str(text);
-            self.backend.count_at(&full, site)
+        self.count_delivered_with_table_at(headers, None, text, site)
+    }
+
+    /// Count delivered text including both section heading context and optional repeated table header.
+    fn count_delivered_with_table_at(
+        &self,
+        headers: &Headers,
+        table_header: Option<&str>,
+        text: &str,
+        site: CountSite,
+    ) -> usize {
+        let has_ctx = self.cfg.include_context && !headers.is_empty();
+        let th = if self.cfg.include_context {
+            table_header
         } else {
-            self.backend.count_at(text, site)
+            None
+        };
+        match (has_ctx, th) {
+            (false, None) => self.backend.count_at(text, site),
+            (true, None) => {
+                let mut full = context_prefix(headers);
+                full.push_str(text);
+                self.backend.count_at(&full, site)
+            }
+            (false, Some(th)) => {
+                let mut full = String::with_capacity(th.len() + 1 + text.len());
+                full.push_str(th);
+                full.push('\n');
+                full.push_str(text);
+                self.backend.count_at(&full, site)
+            }
+            (true, Some(th)) => {
+                let mut full = context_prefix(headers);
+                full.reserve(th.len() + 1 + text.len());
+                full.push_str(th);
+                full.push('\n');
+                full.push_str(text);
+                self.backend.count_at(&full, site)
+            }
         }
     }
 
@@ -226,15 +259,21 @@ impl SmartChunker {
     ) -> Result<(), ChipError> {
         let max = self.cfg.max_tokens;
         if !self.cfg.strict || max == 0 {
-            // Chunks that carry headers only know their body count (or 0), so recount them
-            // to report the delivered (context + body) size. Header-less chunks keep the
-            // splitter's count, which is an estimate for chunks well below the limit;
+            // Chunks that carry headers or a repeated table header only know their body count
+            // (or 0), so recount them to report the delivered size. Header-less chunks keep
+            // the splitter's count, which is an estimate for chunks well below the limit;
             // only strict mode guarantees an exact `token_count`.
             if let Some(k) = known_total {
                 c.token_count = k;
-            } else if self.cfg.include_context && !c.headers.is_empty() {
-                c.token_count =
-                    self.count_delivered_at(&c.headers, &c.text, CountSite::FinalizeInput);
+            } else if self.cfg.include_context
+                && (!c.headers.is_empty() || c.table_header.is_some())
+            {
+                c.token_count = self.count_delivered_with_table_at(
+                    &c.headers,
+                    c.table_header.as_deref(),
+                    &c.text,
+                    CountSite::FinalizeInput,
+                );
             }
             out.push(c);
             return Ok(());
@@ -242,33 +281,62 @@ impl SmartChunker {
 
         // `token_count` is part of the public result and is exact in strict mode. Reuse an
         // upstream exact count when available; otherwise perform one authoritative count here.
-        // Do not substitute atom sums, which would make the reported token_count approximate.
-        // Count the actual delivered representation first. Most chunks fit with their
-        // context, so this ordering avoids a separate context+first-scalar tokenization pass.
-        // Only when the full contextualized chunk is over budget do we test whether context
-        // itself prevents even the first scalar from fitting and should be dropped.
-        // `known_total`, when present, is an exact count of the delivered string
-        // (context prefix + body), whether or not headers are attached.
         let mut total = match known_total {
             Some(k) => k,
-            None => self.count_delivered_at(&c.headers, &c.text, CountSite::FinalizeInput),
+            None => self.count_delivered_with_table_at(
+                &c.headers,
+                c.table_header.as_deref(),
+                &c.text,
+                CountSite::FinalizeInput,
+            ),
         };
         if total <= max {
             c.token_count = total;
             out.push(c);
             return Ok(());
         }
+        if c.table_header.is_some() {
+            if let Some((_, first)) = c.text.grapheme_indices(true).next() {
+                let first_end = first.len();
+                if self.count_delivered_with_table_at(
+                    &c.headers,
+                    c.table_header.as_deref(),
+                    &c.text[..first_end],
+                    CountSite::FinalizeHeaderCheck,
+                ) > max
+                {
+                    c.table_header = None;
+                    total = self.count_delivered_with_table_at(
+                        &c.headers,
+                        None,
+                        &c.text,
+                        CountSite::FinalizeRetry,
+                    );
+                    if total <= max {
+                        c.token_count = total;
+                        out.push(c);
+                        return Ok(());
+                    }
+                }
+            }
+        }
         if !c.headers.is_empty() {
             if let Some((_, first)) = c.text.grapheme_indices(true).next() {
                 let first_end = first.len();
-                if self.count_delivered_at(
+                if self.count_delivered_with_table_at(
                     &c.headers,
+                    c.table_header.as_deref(),
                     &c.text[..first_end],
                     CountSite::FinalizeHeaderCheck,
                 ) > max
                 {
                     c.headers = empty_headers();
-                    total = self.count_delivered_at(&c.headers, &c.text, CountSite::FinalizeRetry);
+                    total = self.count_delivered_with_table_at(
+                        &c.headers,
+                        c.table_header.as_deref(),
+                        &c.text,
+                        CountSite::FinalizeRetry,
+                    );
                     if total <= max {
                         c.token_count = total;
                         out.push(c);
@@ -297,8 +365,12 @@ impl SmartChunker {
                     best = Some((end_i, 0));
                     continue;
                 }
-                let n =
-                    self.count_delivered_at(&c.headers, &text[ts..te], CountSite::FinalizeRetry);
+                let n = self.count_delivered_with_table_at(
+                    &c.headers,
+                    c.table_header.as_deref(),
+                    &text[ts..te],
+                    CountSite::FinalizeRetry,
+                );
                 if n <= max {
                     best = Some((end_i, n));
                 }
@@ -315,8 +387,9 @@ impl SmartChunker {
                         bi += 1;
                         continue;
                     }
-                    let one_n = self.count_delivered_at(
+                    let one_n = self.count_delivered_with_table_at(
                         &c.headers,
+                        c.table_header.as_deref(),
                         &text[ts..te],
                         CountSite::FinalizeRetry,
                     );
@@ -339,8 +412,9 @@ impl SmartChunker {
                     if snapped > boundaries[bi] {
                         let (ts, te) = trim_bounds(text, boundaries[bi], snapped);
                         if ts < te {
-                            let sn = self.count_delivered_at(
+                            let sn = self.count_delivered_with_table_at(
                                 &c.headers,
+                                c.table_header.as_deref(),
                                 &text[ts..te],
                                 CountSite::FinalizeSnap,
                             );
@@ -373,6 +447,7 @@ impl SmartChunker {
                     end_byte,
                     token_count: n,
                     headers: Arc::clone(&c.headers),
+                    table_header: c.table_header.clone(),
                 };
                 // `n` was counted against this exact trimmed slice above; do not tokenize it again.
                 if n <= max {
@@ -403,6 +478,7 @@ impl SmartChunker {
                 end_byte,
                 token_count: p.exact_total.unwrap_or(p.tokens),
                 headers: p.headers,
+                table_header: None,
             };
             self.finalize_with_count(c, out, known_total)?;
         }
@@ -487,6 +563,7 @@ impl SmartChunker {
                 .backend
                 .count_at(head_text, CountSite::PendingListSplit),
             headers: Arc::clone(&p.headers),
+            table_header: None,
         };
         let tail_text = p.text[tail_start..].to_string();
         let tail_tokens = self
@@ -545,6 +622,7 @@ impl SmartChunker {
             || !self.backend.is_guarded()
             || b.is_code
             || b.text.trim().is_empty()
+            || !b.tables().is_empty()
         {
             return Ok(false);
         }
@@ -682,6 +760,7 @@ impl SmartChunker {
                     end_byte,
                     token_count: b_tokens,
                     headers: b.headers,
+                    table_header: None,
                 };
                 self.finalize_with_count(c, out, known_total)?;
             }
@@ -983,6 +1062,12 @@ impl SmartChunker {
         b_tokens: usize,
         out: &mut Vec<Chunk>,
     ) -> Result<(), ChipError> {
+        if self.cfg.include_context && !b.is_code {
+            let tables = b.tables();
+            if !tables.is_empty() {
+                return self.split_block_with_tables(b, &tables, budget, out);
+            }
+        }
         // `count_block_text` returns an exact count only when it tokenized the whole block;
         // above BLOCK_PROBE_MIN_BYTES it may return a prefix lower bound instead.
         let known_total = (b.text.len() <= BLOCK_PROBE_MIN_BYTES).then_some(b_tokens);
@@ -1016,16 +1101,250 @@ impl SmartChunker {
         }
         Ok(())
     }
+
+    #[allow(clippy::too_many_arguments)]
+    fn split_subslice(
+        &self,
+        b: &Block,
+        cursor: &mut crate::split_engine::CharCursor,
+        start: usize,
+        end: usize,
+        budget: usize,
+        cuts: ListCuts,
+        out: &mut Vec<Chunk>,
+    ) -> Result<(), ChipError> {
+        let (ts, te) = trim_bounds(&b.text, start, end);
+        if ts >= te {
+            return Ok(());
+        }
+        let slice = &b.text[ts..te];
+        let origin = Origin {
+            byte: b.start_byte + ts,
+            chr: b.start_char + cursor.at(&b.text, ts),
+        };
+        let cuts = if cuts.top.is_empty() && cuts.nested.is_empty() && !b.is_code {
+            list_cuts_for_text(slice, false)
+        } else {
+            cuts
+        };
+        let mut pieces = Vec::new();
+        split_by_tokens_with_lists_known(
+            slice,
+            origin,
+            budget,
+            self.cfg.overlap_tokens,
+            self.cfg.snap_words,
+            &self.backend,
+            &b.headers,
+            cuts,
+            None,
+            &mut pieces,
+        );
+        for piece in pieces {
+            let known_total = if self.cfg.snap_words && piece.headers.is_empty() {
+                Some(piece.token_count)
+            } else {
+                None
+            };
+            self.finalize_with_count(piece, out, known_total)?;
+        }
+        Ok(())
+    }
+
+    /// Split an oversized block containing one or more GFM tables. Tables that fit on their own
+    /// stay whole; oversized tables are split at row boundaries and repeat their header +
+    /// delimiter rows on every continuation chunk (`Chunk::table_header`).
+    fn split_block_with_tables(
+        &self,
+        b: &Block,
+        tables: &[crate::markdown::table_parser::TableBlock],
+        budget: usize,
+        out: &mut Vec<Chunk>,
+    ) -> Result<(), ChipError> {
+        let mut cursor = crate::split_engine::CharCursor::new();
+        let mut pos = 0usize;
+
+        for table in tables {
+            if pos < table.start_byte {
+                self.split_subslice(
+                    b,
+                    &mut cursor,
+                    pos,
+                    table.start_byte,
+                    budget,
+                    ListCuts::default(),
+                    out,
+                )?;
+            }
+
+            let (ts, te) = trim_bounds(&b.text, table.start_byte, table.end_byte);
+            if ts >= te {
+                pos = table.end_byte;
+                continue;
+            }
+
+            // If this table is only part of a mixed block, it might fit intact on its own.
+            if table.start_byte > 0 || table.end_byte < b.text.len() {
+                let table_slice = &b.text[ts..te];
+                let delivered =
+                    self.count_delivered_at(&b.headers, table_slice, CountSite::BlockWhole);
+                if self.cfg.max_tokens == 0 || delivered <= self.cfg.max_tokens {
+                    let sc = b.start_char + cursor.at(&b.text, ts);
+                    let ec = b.start_char + cursor.at(&b.text, te);
+                    let c = Chunk {
+                        text: table_slice.to_string(),
+                        start_char: sc,
+                        end_char: ec,
+                        start_byte: b.start_byte + ts,
+                        end_byte: b.start_byte + te,
+                        token_count: delivered,
+                        headers: Arc::clone(&b.headers),
+                        table_header: None,
+                    };
+                    self.finalize_with_count(c, out, Some(delivered))?;
+                    pos = table.end_byte;
+                    continue;
+                }
+            }
+
+            let th_str = table.header_text.as_str();
+            let th_with_nl = format!("{th_str}\n");
+            let th_tokens = self.count_small_cached_at(&th_with_nl, CountSite::Context);
+            let join_slack = usize::from(!self.backend.joins_are_additive());
+            let header_cost = th_tokens.saturating_add(1).saturating_add(join_slack);
+            let can_repeat = th_tokens > 0
+                && header_cost.saturating_mul(2) <= budget
+                && budget > header_cost.saturating_add(1)
+                && table.body_start_byte < table.end_byte;
+
+            if !can_repeat {
+                let row_cuts = ListCuts {
+                    top: table
+                        .row_starts
+                        .iter()
+                        .filter_map(|&r| r.checked_sub(ts))
+                        .filter(|&r| r > 0 && r < te - ts)
+                        .collect(),
+                    nested: Vec::new(),
+                };
+                self.split_subslice(b, &mut cursor, ts, te, budget, row_cuts, out)?;
+                pos = table.end_byte;
+                continue;
+            }
+
+            let row_budget = budget.saturating_sub(header_cost);
+            let body_origin = Origin {
+                byte: b.start_byte + table.body_start_byte,
+                chr: b.start_char + cursor.at(&b.text, table.body_start_byte),
+            };
+            let body_text = &b.text[table.body_start_byte..table.end_byte];
+            let body_row_cuts = ListCuts {
+                top: table
+                    .row_starts
+                    .iter()
+                    .filter_map(|&r| r.checked_sub(table.body_start_byte))
+                    .filter(|&r| r > 0)
+                    .collect(),
+                nested: Vec::new(),
+            };
+            let mut body_pieces = Vec::new();
+            split_by_tokens_with_lists_known(
+                body_text,
+                body_origin,
+                row_budget,
+                self.cfg.overlap_tokens,
+                self.cfg.snap_words,
+                &self.backend,
+                &b.headers,
+                body_row_cuts,
+                None,
+                &mut body_pieces,
+            );
+
+            if body_pieces.is_empty() {
+                self.split_subslice(
+                    b,
+                    &mut cursor,
+                    table.start_byte,
+                    table.end_byte,
+                    budget,
+                    ListCuts::default(),
+                    out,
+                )?;
+                pos = table.end_byte;
+                continue;
+            }
+
+            let th_arc: Arc<str> = Arc::from(th_str);
+            let p0_rel_end = body_pieces[0].end_byte - b.start_byte;
+            let (p0_ts, p0_te) = trim_bounds(&b.text, table.start_byte, p0_rel_end);
+            let merged_p0_text = &b.text[p0_ts..p0_te];
+            let p0_delivered =
+                self.count_delivered_at(&b.headers, merged_p0_text, CountSite::Candidate);
+
+            let mut pieces_iter = body_pieces.into_iter();
+            if self.cfg.max_tokens == 0 || p0_delivered <= self.cfg.max_tokens {
+                let _ = pieces_iter.next();
+                let sc = b.start_char + cursor.at(&b.text, p0_ts);
+                let ec = b.start_char + cursor.at(&b.text, p0_te);
+                let first_chunk = Chunk {
+                    text: merged_p0_text.to_string(),
+                    start_char: sc,
+                    end_char: ec,
+                    start_byte: b.start_byte + p0_ts,
+                    end_byte: b.start_byte + p0_te,
+                    token_count: p0_delivered,
+                    headers: Arc::clone(&b.headers),
+                    table_header: None,
+                };
+                self.finalize_with_count(first_chunk, out, Some(p0_delivered))?;
+            } else {
+                self.split_subslice(
+                    b,
+                    &mut cursor,
+                    table.start_byte,
+                    table.body_start_byte,
+                    budget,
+                    ListCuts::default(),
+                    out,
+                )?;
+            }
+
+            for mut piece in pieces_iter {
+                piece.table_header = Some(Arc::clone(&th_arc));
+                self.finalize_with_count(piece, out, None)?;
+            }
+
+            pos = table.end_byte;
+        }
+
+        if pos < b.text.len() {
+            self.split_subslice(
+                b,
+                &mut cursor,
+                pos,
+                b.text.len(),
+                budget,
+                ListCuts::default(),
+                out,
+            )?;
+        }
+        Ok(())
+    }
 }
 
 /// List-item start offsets inside a block, used to prefer item boundaries when an oversized
 /// block has to be split. Fenced code blocks yield none.
 fn list_cuts(b: &Block) -> ListCuts {
+    list_cuts_for_text(&b.text, b.is_code)
+}
+
+fn list_cuts_for_text(text: &str, is_code: bool) -> ListCuts {
     let mut cuts = ListCuts::default();
-    if b.is_code {
+    if is_code {
         return cuts;
     }
-    for item in crate::markdown::list_parser::parse_list_items(&b.text) {
+    for item in crate::markdown::list_parser::parse_list_items(text) {
         if item.start_byte == 0 {
             continue;
         }

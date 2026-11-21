@@ -101,19 +101,34 @@ impl CountSite {
         ("merge_fast_disabled", CountSite::MergeFastDisabled),
         ("merge_estimate_rejected", CountSite::MergeEstimateRejected),
         ("merge_prefix_candidate", CountSite::MergePrefixCandidate),
-        ("merge_candidate_too_large", CountSite::MergeCandidateTooLarge),
+        (
+            "merge_candidate_too_large",
+            CountSite::MergeCandidateTooLarge,
+        ),
         ("merge_exact_accept", CountSite::MergeExactAccept),
         ("merge_exact_reject", CountSite::MergeExactReject),
-        ("merge_estimate_under_2plus", CountSite::MergeEstimateUnder2Plus),
+        (
+            "merge_estimate_under_2plus",
+            CountSite::MergeEstimateUnder2Plus,
+        ),
         ("merge_estimate_under_1", CountSite::MergeEstimateUnder1),
         ("merge_estimate_equal", CountSite::MergeEstimateEqual),
         ("merge_estimate_over_1", CountSite::MergeEstimateOver1),
         ("merge_estimate_over_2", CountSite::MergeEstimateOver2),
         ("merge_estimate_over_3", CountSite::MergeEstimateOver3),
-        ("merge_estimate_over_4plus", CountSite::MergeEstimateOver4Plus),
-        ("merge_margin1_would_accept", CountSite::MergeMargin1WouldAccept),
+        (
+            "merge_estimate_over_4plus",
+            CountSite::MergeEstimateOver4Plus,
+        ),
+        (
+            "merge_margin1_would_accept",
+            CountSite::MergeMargin1WouldAccept,
+        ),
         ("merge_margin1_unsafe", CountSite::MergeMargin1Unsafe),
-        ("merge_margin0_would_accept", CountSite::MergeMargin0WouldAccept),
+        (
+            "merge_margin0_would_accept",
+            CountSite::MergeMargin0WouldAccept,
+        ),
         ("merge_margin0_unsafe", CountSite::MergeMargin0Unsafe),
         ("merge_early_reject", CountSite::MergeEarlyReject),
     ];
@@ -285,7 +300,9 @@ impl Tokenizer for MaxTokenizer {
     // additive whenever every member is (a fixed per-member overhead only helps: it is added
     // once on the left and once per piece on the right).
     fn joins_are_additive(&self) -> bool {
-        self.parts.iter().all(|(backend, _)| backend.joins_are_additive())
+        self.parts
+            .iter()
+            .all(|(backend, _)| backend.joins_are_additive())
     }
 
     // Fewer bytes per token means more tokens, so the smallest ratio is the binding one.
@@ -413,6 +430,23 @@ impl Backend {
 
     #[cfg(not(feature = "hf"))]
     pub fn from_tokenizer_file(_path: &str) -> Result<Arc<Backend>, ChipError> {
+        Err(ChipError::Backend(
+            "this build has no HuggingFace tokenizer support; rebuild with `--features hf`"
+                .to_string(),
+        ))
+    }
+
+    /// Load a Hugging Face tokenizer from its in-memory `tokenizer.json` UTF-8 bytes.
+    #[cfg(feature = "hf")]
+    pub fn from_tokenizer_bytes(bytes: &[u8]) -> Result<Arc<Backend>, ChipError> {
+        let tok = tokenizers::Tokenizer::from_bytes(bytes)
+            .map_err(|e| ChipError::Backend(e.to_string()))?;
+        Ok(Arc::new(Backend::Hf(Box::new(tok))))
+    }
+
+    /// Load a Hugging Face tokenizer from its in-memory `tokenizer.json` UTF-8 bytes.
+    #[cfg(not(feature = "hf"))]
+    pub fn from_tokenizer_bytes(_bytes: &[u8]) -> Result<Arc<Backend>, ChipError> {
         Err(ChipError::Backend(
             "this build has no HuggingFace tokenizer support; rebuild with `--features hf`"
                 .to_string(),

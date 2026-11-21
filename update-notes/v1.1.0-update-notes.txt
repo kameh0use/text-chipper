@@ -1,0 +1,29 @@
+text-chipper 1.1.0 — 2026-11-21
+
+This release adds GFM Markdown table-aware chunking and expands Python tokenizer support with
+TextChipper.from_pretrained, zero-GIL Hugging Face tokenizer object extraction, and custom
+Python token counters.
+
+Markdown table-aware chunking (include_context=True):
+- GFM pipe tables (header row + matching delimiter row + body rows) that fit within the token
+  budget are kept intact in a single chunk.
+- Oversized tables are split strictly at row boundaries. The opening chunk starts with the
+  table in the source text (table_header=None); continuation chunks preserve chunk.text as the
+  exact source slice of their data rows while exposing the repeated header + delimiter rows on
+  chunk.table_header and automatically prepending them in chunk.contextualized_text.
+- In strict mode, the repeated table header is counted in chunk.token_count and enforced
+  against max_length.
+- Rust users can inspect table structure on any Block via Block::tables() (and parse_tables /
+  TableBlock) as well as BlockKind::Table.
+
+Hugging Face and custom Python tokenizers:
+- TextChipper.from_pretrained(model_name_or_path, **kwargs) loads a tokenizer from a local
+  tokenizer.json file, a model directory, or a Hugging Face Hub model ID (via huggingface_hub,
+  tokenizers, or transformers when installed).
+- TextChipper(..., tokenizer=..., guard_tokenizers=[...]) accepts pre-loaded Hugging Face
+  tokenizers.Tokenizer and transformers.PreTrainedTokenizerFast objects (extracting their JSON
+  definition into the native Rust backend via Backend::from_tokenizer_bytes for zero-GIL speed),
+  local paths, objects with an .encode(text) method, or custom callable(text) -> int functions.
+
+Validation for this release: 117 Rust unit tests, 23 Python binding test cases, and 26.9M
+release-suite invariant checks passed with zero failures.

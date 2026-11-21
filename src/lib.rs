@@ -64,6 +64,7 @@ pub use chunker::{smart_chunk, smart_chunk_mapped};
 pub use errors::ChipError;
 pub use file::{read_text_file, FileChunker, FLAT_FILE_MAX_BYTES};
 pub use markdown::list_parser::{parse_list_items, ListItem, ListMarker};
+pub use markdown::table_parser::{parse_tables, TableBlock};
 pub use markdown::BlockParser;
 pub use normalization::{NormBase, NormMap, Normalization, OrigSpan};
 #[cfg(feature = "python")]
@@ -85,27 +86,27 @@ fn text_chipper(m: &Bound<'_, PyModule>) -> PyResult<()> {
 // Test modules live in `src/tests/`. `#[path]` keeps each module at the crate root so that
 // `use super::*` and `crate::...` paths inside them stay valid.
 #[cfg(test)]
-#[path = "tests/unit.rs"]
-mod tests;
-#[cfg(test)]
 #[path = "tests/merge_margin.rs"]
 mod merge_margin_tests;
-#[cfg(test)]
-#[cfg_attr(not(feature = "diagnostics"), allow(dead_code, unused_imports))]
-#[path = "tests/oracle_list.rs"]
-mod oracle_tests;
 #[cfg(test)]
 #[cfg_attr(not(feature = "diagnostics"), allow(dead_code, unused_imports))]
 #[path = "tests/oracle_block.rs"]
 mod oracle_block_tests;
 #[cfg(test)]
 #[cfg_attr(not(feature = "diagnostics"), allow(dead_code, unused_imports))]
+#[path = "tests/oracle_list.rs"]
+mod oracle_tests;
+#[cfg(test)]
+#[cfg_attr(not(feature = "diagnostics"), allow(dead_code, unused_imports))]
 #[path = "tests/parallel.rs"]
 mod parallel_tests;
+#[cfg(all(test, feature = "diagnostics"))]
+#[path = "tests/release_suite.rs"]
+mod release_suite;
 #[cfg(test)]
 #[cfg_attr(not(feature = "diagnostics"), allow(dead_code, unused_imports))]
 #[path = "tests/robustness.rs"]
 mod robustness_tests;
-#[cfg(all(test, feature = "diagnostics"))]
-#[path = "tests/release_suite.rs"]
-mod release_suite;
+#[cfg(test)]
+#[path = "tests/unit.rs"]
+mod tests;

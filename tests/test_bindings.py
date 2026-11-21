@@ -306,3 +306,103 @@ def test_guard_arguments_are_validated():
         TextChipper(guard_encodings=["no_such_encoding"])
     with pytest.raises(TypeError):
         TextChipper(guard_encodings="o200k_base")  # a bare string is not a list of names
+
+
+
+# --------------------------------------------------------------------------- table-aware chunking
+
+
+def test_200_row_table_repeats_header_and_respects_budget():
+    header = "| Row | Item | Category | Price |\n| --- | --- | --- | ---: |"
+    rows = [f"| {i:03d} | Product-{i} | Hardware | ${i * 10} |" for i in range(1, 201)]
+    doc = "# Inventory\n\n" + header + "\n" + "\n".join(rows) + "\n"
+
+    chip = TextChipper(max_length=120, overlap=0, encoding="cl100k_base")
+    chunks = chip.chunk(doc)
+    assert len(chunks) >= 10
+    assert chunks[0].table_header is None
+    assert chunks[0].text.startswith(header)
+
+    raw = doc.encode("utf-8")
+    total_data_rows = 0
+    for idx, c in enumerate(chunks):
+        assert c.token_count <= 120
+        assert chip.count_tokens(c.contextualized_text) == c.token_count
+        assert header in c.contextualized_text
+        assert doc[c.start_index : c.end_index] == c.text
+        assert raw[c.start_byte : c.end_byte].decode("utf-8") == c.text
+        if idx > 0:
+            assert c.table_header == header
+        for line in c.text.splitlines():
+            assert line.startswith("|") and line.endswith("|")
+            if "Product-" in line:
+                total_data_rows += 1
+    assert total_data_rows == 200
+
+
+# --------------------------------------------------------------------------- custom & HF tokenizers
+
+
+_MINIMAL_HF_JSON = """{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [],
+  "normalizer": null,
+  "pre_tokenizer": { "type": "Whitespace" },
+  "post_processor": null,
+  "decoder": null,
+  "model": {
+    "type": "WordLevel",
+    "vocab": { "[UNK]": 0, "alpha": 1, "beta": 2, "gamma": 3 },
+    "unk_token": "[UNK]"
+  }
+}"""
+
+
+def test_from_pretrained_local_file_and_directory(tmp_path):
+    tok_file = tmp_path / "tokenizer.json"
+    tok_file.write_text(_MINIMAL_HF_JSON, encoding="utf-8")
+
+    # 1. From directory containing tokenizer.json
+    chip_dir = TextChipper.from_pretrained(tmp_path, max_length=12, overlap=0)
+    assert chip_dir.encoding.startswith("hf:")
+    assert chip_dir.count_tokens("alpha beta gamma") == 3
+
+    # 2. From direct tokenizer.json path
+    chip_file = TextChipper.from_pretrained(str(tok_file), max_length=12, overlap=0)
+    doc = "alpha beta gamma " * 30
+    chunks = chip_file.chunk(doc)
+    assert len(chunks) > 5
+    for c in chunks:
+        assert c.token_count <= 12
+        assert chip_file.count_tokens(c.contextualized_text) == c.token_count
+
+
+def test_tokenizer_object_fast_extraction_and_custom_callable():
+    # Mock a HuggingFace `tokenizers.Tokenizer` / `PreTrainedTokenizerFast`
+    class FakeBackendTokenizer:
+        def to_str(self):
+            return _MINIMAL_HF_JSON
+
+    class FakePreTrainedTokenizerFast:
+        name_or_path = "BAAI/bge-large-en-v1.5"
+        backend_tokenizer = FakeBackendTokenizer()
+
+    chip_hf = TextChipper(max_length=10, overlap=0, tokenizer=FakePreTrainedTokenizerFast())
+    assert chip_hf.encoding == "hf:BAAI/bge-large-en-v1.5"
+    assert chip_hf.count_tokens("alpha beta") == 2
+
+    # Custom Python callable counter
+    chip_fn = TextChipper(
+        max_length=10,
+        overlap=0,
+        tokenizer=lambda text: len(text.split()),
+    )
+    assert chip_fn.encoding == "custom:callable"
+    doc = "one two three four five six seven eight nine ten eleven twelve " * 10
+    chunks = chip_fn.chunk(doc)
+    assert len(chunks) > 5
+    for c in chunks:
+        assert c.token_count <= 10
+        assert len(c.contextualized_text.split()) == c.token_count

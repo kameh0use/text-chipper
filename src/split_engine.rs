@@ -135,6 +135,7 @@ fn emit(
         end_byte: origin.byte + e,
         token_count: tokens,
         headers: Arc::clone(headers),
+        table_header: None,
     });
 }
 
@@ -931,7 +932,8 @@ impl<'a> Splitter<'a> {
                 }
             }
         }
-        self.backend.count_at(&self.text[s..e], CountSite::Candidate)
+        self.backend
+            .count_at(&self.text[s..e], CountSite::Candidate)
     }
 
     /// Pack atoms into chunks. With `snap`, a pruned set of structural cut candidates is scored

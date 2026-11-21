@@ -29,9 +29,13 @@ fn bench_chunking(c: &mut Criterion) {
             overlap_tokens: 0,
             ..ChunkConfig::default()
         };
-        group.bench_with_input(BenchmarkId::new("max_tokens", max_tokens), &cfg, |b, cfg| {
-            b.iter(|| smart_chunk(black_box(&text), cfg, &backend).expect("chunking failed"));
-        });
+        group.bench_with_input(
+            BenchmarkId::new("max_tokens", max_tokens),
+            &cfg,
+            |b, cfg| {
+                b.iter(|| smart_chunk(black_box(&text), cfg, &backend).expect("chunking failed"));
+            },
+        );
     }
     group.finish();
 }

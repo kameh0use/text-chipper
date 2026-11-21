@@ -826,3 +826,117 @@ fn strict_chunks_from_a_max_of_backend_fit_every_member() {
         }
     }
 }
+
+#[test]
+fn table_that_fits_stays_intact_in_one_chunk() {
+    let backend = Backend::from_name("cl100k_base").unwrap();
+    let table =
+        "| Kalem | Tutar |\n| --- | ---: |\n| Gelir | 1000 |\n| Gider | 400 |\n| Net | 600 |";
+    let doc = format!("# Özet\n\nKısa açıklama paragrafı.\n\n{table}\n\nSonuç paragrafı.\n");
+    let mut c = cfg(64, 0, true);
+    c.merge_blocks = false;
+    let chunks = smart_chunk(&doc, &c, &backend).unwrap();
+    assert_eq!(chunks.len(), 3);
+    assert_eq!(chunks[1].text, table);
+    assert_eq!(chunks[1].table_header, None);
+    assert_eq!(
+        &doc[chunks[1].start_byte..chunks[1].end_byte],
+        chunks[1].text
+    );
+}
+
+#[test]
+fn two_hundred_row_table_splits_at_row_boundaries_and_repeats_header_within_budget() {
+    let backend = Backend::from_name("cl100k_base").unwrap();
+    let header = "| Satır No | Kategori | Açıklama | Tutar (TL) |\n| --- | --- | --- | ---: |";
+    let mut rows = Vec::with_capacity(200);
+    for i in 1..=200 {
+        rows.push(format!(
+            "| {i:03} | Kurumsal Hizmet | {i}. dönemsel tahsilat ve mahsup kaydı | {} |",
+            i * 1250
+        ));
+    }
+    let doc = format!("# Finansal Rapor\n\n{header}\n{}\n", rows.join("\n"));
+
+    let chunks = smart_chunk(&doc, &cfg(128, 0, true), &backend).unwrap();
+    assert!(
+        chunks.len() >= 15,
+        "200 rows should split across multiple chunks, got {}",
+        chunks.len()
+    );
+
+    // Chunk 0 starts with the verbatim table header in `text` and has `table_header == None`.
+    assert!(chunks[0].text.starts_with(header));
+    assert_eq!(chunks[0].table_header, None);
+
+    // Every continuation chunk carries `table_header == Some(header)`, starts at a row boundary,
+    // preserves exact source byte offsets, and fits the 128-token budget with header + context included.
+    let mut seen_rows = 0usize;
+    for (idx, ch) in chunks.iter().enumerate() {
+        assert!(
+            ch.token_count <= 128,
+            "chunk {idx} exceeded budget: {}",
+            ch.token_count
+        );
+        let delivered = ch.contextualized_text();
+        assert_eq!(
+            backend.count(&delivered),
+            ch.token_count,
+            "chunk {idx} recount mismatch"
+        );
+        assert!(
+            delivered.contains(header),
+            "chunk {idx} delivered text is missing the table header"
+        );
+        assert_eq!(
+            &doc[ch.start_byte..ch.end_byte],
+            ch.text,
+            "chunk {idx} source byte slice mismatch"
+        );
+        if idx > 0 {
+            assert_eq!(ch.table_header.as_deref(), Some(header));
+        }
+        for line in ch.text.lines() {
+            assert!(
+                line.starts_with('|') && line.ends_with('|'),
+                "chunk {idx} cut a table row mid-line: {line:?}"
+            );
+            if !line.contains("Satır No") && !line.contains("---") {
+                seen_rows += 1;
+            }
+        }
+    }
+    assert_eq!(
+        seen_rows, 200,
+        "all 200 data rows must be preserved without duplication"
+    );
+}
+
+#[cfg(feature = "hf")]
+#[test]
+fn hf_from_tokenizer_bytes_counts_and_chunks_strictly() {
+    let minimal_hf_json = br#"{
+      "version": "1.0",
+      "truncation": null,
+      "padding": null,
+      "added_tokens": [],
+      "normalizer": null,
+      "pre_tokenizer": { "type": "Whitespace" },
+      "post_processor": null,
+      "decoder": null,
+      "model": {
+        "type": "WordLevel",
+        "vocab": { "[UNK]": 0, "hello": 1, "world": 2, "rust": 3, "table": 4 },
+        "unk_token": "[UNK]"
+      }
+    }"#;
+    let backend = Backend::from_tokenizer_bytes(minimal_hf_json).unwrap();
+    assert_eq!(backend.count("hello world rust"), 3);
+    let doc = "hello world rust table ".repeat(50);
+    let chunks = smart_chunk(&doc, &cfg(16, 0, true), &backend).unwrap();
+    assert!(chunks.len() > 10);
+    for ch in &chunks {
+        assert!(ch.token_count <= 16);
+        assert_eq!(backend.count(&ch.contextualized_text()), ch.token_count);
+    }
+}

@@ -1,14 +1,15 @@
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyString, PyType};
 
 use crate::parallel::par_map_ordered;
 
 use super::{
     context_prefix, smart_chunk_mapped, Backend, ChipError, Chunk, ChunkConfig, FileChunker,
-    Normalization, OrigSpan,
+    Normalization, OrigSpan, Tokenizer,
 };
 
 // PyO3 bindings: the Python-facing API.
@@ -34,11 +35,257 @@ fn parse_errors(errors: &str) -> PyResult<bool> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum PyTokMode {
+    Callable,
+    EncodeNoSpecial,
+    EncodePlain,
+}
+
+/// Thread-safe wrapper around a Python callable `fn(str) -> int` or an object with `.encode(str)`.
+struct PyTokenizer {
+    obj: Py<PyAny>,
+    mode: PyTokMode,
+}
+
+impl PyTokenizer {
+    fn call_py(&self, py: Python<'_>, text: &str) -> PyResult<usize> {
+        let bound = self.obj.bind(py);
+        match self.mode {
+            PyTokMode::Callable => bound.call1((text,))?.extract::<usize>(),
+            PyTokMode::EncodeNoSpecial => {
+                let kwargs = PyDict::new(py);
+                kwargs.set_item("add_special_tokens", false)?;
+                let ids = bound.call_method("encode", (text,), Some(&kwargs))?;
+                ids.len()
+            }
+            PyTokMode::EncodePlain => {
+                let ids = bound.call_method1("encode", (text,))?;
+                ids.len()
+            }
+        }
+    }
+}
+
+impl Tokenizer for PyTokenizer {
+    fn count_tokens(&self, text: &str) -> usize {
+        if text.is_empty() {
+            return 0;
+        }
+        Python::attach(|py| {
+            self.call_py(py, text)
+                .unwrap_or_else(|_| text.chars().count())
+        })
+    }
+}
+
+fn is_builtin_encoding(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "cl100k_base" | "o200k_base" | "p50k_base" | "r50k_base" | "chars" | "words"
+    )
+}
+
+/// Resolve a Python `tokenizer` argument into a native Rust `Backend` whenever possible
+/// (extracting the JSON representation from Hugging Face `tokenizers.Tokenizer` or
+/// `transformers.PreTrainedTokenizerFast` for zero-GIL native speed), or falling back to
+/// `PyTokenizer` for custom Python callables and `.encode()` objects.
+fn resolve_py_tokenizer(obj: &Bound<'_, PyAny>) -> PyResult<(Arc<Backend>, String)> {
+    // 1. String or os.PathLike (built-in encoding name, tokenizer.json file, or model directory).
+    let maybe_str: Option<String> = if obj.is_instance_of::<PyString>() {
+        Some(obj.extract::<String>()?)
+    } else if obj.hasattr("__fspath__")? {
+        Some(obj.call_method0("__fspath__")?.extract::<String>()?)
+    } else {
+        None
+    };
+    if let Some(s) = maybe_str {
+        if is_builtin_encoding(&s) {
+            let b = Backend::from_name(&s).map_err(to_pyerr)?;
+            return Ok((b, s));
+        }
+        let path = Path::new(&s);
+        if path.is_dir() {
+            let candidate = path.join("tokenizer.json");
+            if candidate.is_file() {
+                let p_str = candidate.to_string_lossy().into_owned();
+                let b = Backend::from_tokenizer_file(&p_str).map_err(to_pyerr)?;
+                return Ok((b, format!("hf:{p_str}")));
+            }
+        }
+        let b = Backend::from_tokenizer_file(&s).map_err(to_pyerr)?;
+        return Ok((b, format!("hf:{s}")));
+    }
+
+    // 2. Hugging Face `transformers.PreTrainedTokenizerFast` (has `.backend_tokenizer.to_str()`).
+    if obj.hasattr("backend_tokenizer")? {
+        let bt = obj.getattr("backend_tokenizer")?;
+        if bt.hasattr("to_str")? {
+            let json_str: String = bt.call_method0("to_str")?.extract()?;
+            let label = obj
+                .getattr("name_or_path")
+                .and_then(|v| v.extract::<String>())
+                .ok()
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "PreTrainedTokenizerFast".to_string());
+            let b = Backend::from_tokenizer_bytes(json_str.as_bytes()).map_err(to_pyerr)?;
+            return Ok((b, format!("hf:{label}")));
+        }
+    }
+
+    // 3. Hugging Face `tokenizers.Tokenizer` (has `.to_str()`).
+    if obj.hasattr("to_str")? {
+        if let Ok(json_str) = obj
+            .call_method0("to_str")
+            .and_then(|v| v.extract::<String>())
+        {
+            let b = Backend::from_tokenizer_bytes(json_str.as_bytes()).map_err(to_pyerr)?;
+            return Ok((b, "hf:Tokenizer".to_string()));
+        }
+    }
+
+    // 4. An object with `.encode(text)` (e.g. tiktoken.Encoding, SentencePiece, slow HF tokenizer).
+    if obj.hasattr("encode")? {
+        let py = obj.py();
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("add_special_tokens", false)?;
+        let mode = if obj
+            .call_method("encode", ("hello",), Some(&kwargs))
+            .and_then(|ids| ids.len())
+            .is_ok()
+        {
+            Some(PyTokMode::EncodeNoSpecial)
+        } else if obj
+            .call_method1("encode", ("hello",))
+            .and_then(|ids| ids.len())
+            .is_ok()
+        {
+            Some(PyTokMode::EncodePlain)
+        } else {
+            None
+        };
+        if let Some(mode) = mode {
+            let ty_name = obj
+                .get_type()
+                .name()
+                .map(|n| n.to_string())
+                .unwrap_or_else(|_| "encode".to_string());
+            let tok = PyTokenizer {
+                obj: obj.clone().unbind(),
+                mode,
+            };
+            return Ok((
+                Backend::from_tokenizer(Arc::new(tok)),
+                format!("custom:{ty_name}"),
+            ));
+        }
+    }
+
+    // 5. A Python callable `fn(text: str) -> int`.
+    if obj.is_callable() {
+        let test_res = obj.call1(("hello",))?;
+        let _ = test_res.extract::<usize>().map_err(|_| {
+            PyTypeError::new_err(
+                "custom tokenizer callable must return a non-negative integer token count",
+            )
+        })?;
+        let tok = PyTokenizer {
+            obj: obj.clone().unbind(),
+            mode: PyTokMode::Callable,
+        };
+        return Ok((
+            Backend::from_tokenizer(Arc::new(tok)),
+            "custom:callable".to_string(),
+        ));
+    }
+
+    Err(PyTypeError::new_err(
+        "tokenizer must be a Hugging Face Tokenizer, PreTrainedTokenizer, path to tokenizer.json,          built-in encoding name, object with .encode(text), or callable(text) -> int",
+    ))
+}
+
+/// Resolve a pretrained model name, local directory, `tokenizer.json` path, or tokenizer object.
+fn resolve_pretrained_backend(
+    py: Python<'_>,
+    model_name_or_path: &Bound<'_, PyAny>,
+) -> PyResult<(Arc<Backend>, String)> {
+    let maybe_str: Option<String> = if model_name_or_path.is_instance_of::<PyString>() {
+        Some(model_name_or_path.extract::<String>()?)
+    } else if model_name_or_path.hasattr("__fspath__")? {
+        Some(
+            model_name_or_path
+                .call_method0("__fspath__")?
+                .extract::<String>()?,
+        )
+    } else {
+        None
+    };
+
+    let Some(s) = maybe_str else {
+        return resolve_py_tokenizer(model_name_or_path);
+    };
+
+    if is_builtin_encoding(&s) {
+        let b = Backend::from_name(&s).map_err(to_pyerr)?;
+        return Ok((b, s));
+    }
+
+    let path = Path::new(&s);
+    if path.is_file() {
+        let b = Backend::from_tokenizer_file(&s).map_err(to_pyerr)?;
+        return Ok((b, format!("hf:{s}")));
+    }
+    if path.is_dir() {
+        let candidate = path.join("tokenizer.json");
+        if candidate.is_file() {
+            let p_str = candidate.to_string_lossy().into_owned();
+            let b = Backend::from_tokenizer_file(&p_str).map_err(to_pyerr)?;
+            return Ok((b, format!("hf:{s}")));
+        }
+    }
+
+    // Try `huggingface_hub.hf_hub_download(repo_id=s, filename="tokenizer.json")`.
+    if let Ok(hf_hub) = py.import("huggingface_hub") {
+        if let Ok(downloaded) = hf_hub
+            .call_method1("hf_hub_download", (s.as_str(), "tokenizer.json"))
+            .and_then(|v| v.extract::<String>())
+        {
+            let b = Backend::from_tokenizer_file(&downloaded).map_err(to_pyerr)?;
+            return Ok((b, format!("hf:{s}")));
+        }
+    }
+
+    // Try `tokenizers.Tokenizer.from_pretrained(s)`.
+    if let Ok(tok_mod) = py.import("tokenizers") {
+        if let Ok(tok_cls) = tok_mod.getattr("Tokenizer") {
+            if let Ok(tok_obj) = tok_cls.call_method1("from_pretrained", (s.as_str(),)) {
+                let (b, _) = resolve_py_tokenizer(&tok_obj)?;
+                return Ok((b, format!("hf:{s}")));
+            }
+        }
+    }
+
+    // Try `transformers.AutoTokenizer.from_pretrained(s)`.
+    if let Ok(tr_mod) = py.import("transformers") {
+        if let Ok(auto_cls) = tr_mod.getattr("AutoTokenizer") {
+            if let Ok(tok_obj) = auto_cls.call_method1("from_pretrained", (s.as_str(),)) {
+                let (b, _) = resolve_py_tokenizer(&tok_obj)?;
+                return Ok((b, format!("hf:{s}")));
+            }
+        }
+    }
+
+    Err(PyRuntimeError::new_err(format!(
+        "could not load pretrained tokenizer '{s}': pass a local path to tokenizer.json (or a          directory containing it), or install 'huggingface_hub', 'tokenizers', or 'transformers'"
+    )))
+}
+
 /// One chunk of text with its position in the normalized input and in the original input.
 ///
 /// `start_index`/`end_index` are character offsets and `start_byte`/`end_byte` are UTF-8 byte
 /// offsets into the text *after* normalization; the `orig_*` fields map the same span back to
-/// the string you passed in. `contextualized_text` is `text` prefixed with the header context.
+/// the string you passed in. `contextualized_text` is `text` prefixed with the header context
+/// and, for continuation chunks of a split Markdown table, the repeated table header row.
 #[pyclass(module = "text_chipper", frozen, get_all)]
 #[derive(Clone, Debug)]
 pub struct TextChunk {
@@ -52,12 +299,15 @@ pub struct TextChunk {
     pub orig_end_index: usize,
     pub orig_start_byte: usize,
     pub orig_end_byte: usize,
-    /// Token count of the delivered text (header context included). Exact when `strict=True`
-    /// (the default); in non-strict mode it may be an estimate.
+    /// Token count of the delivered text (header context and repeated table header included).
+    /// Exact when `strict=True` (the default); in non-strict mode it may be an estimate.
     pub token_count: usize,
     /// Section headings that contain this chunk (outermost first). Always empty when
     /// `include_context=False`.
     pub headers: Vec<String>,
+    /// Repeated Markdown table header + delimiter lines when this chunk is a continuation slice
+    /// of a split table (`None` for non-table chunks or the opening chunk of a table).
+    pub table_header: Option<String>,
 }
 
 impl From<(Chunk, OrigSpan)> for TextChunk {
@@ -74,6 +324,7 @@ impl From<(Chunk, OrigSpan)> for TextChunk {
             orig_end_byte: o.end_byte,
             token_count: c.token_count,
             headers: c.headers.as_ref().clone(),
+            table_header: c.table_header.as_deref().map(str::to_owned),
         }
     }
 }
@@ -91,10 +342,11 @@ impl TextChunk {
 
     #[getter]
     fn contextualized_text(&self) -> String {
-        if self.headers.is_empty() {
-            self.text.clone()
-        } else {
-            format!("{}{}", context_prefix(&self.headers), self.text)
+        match (self.headers.is_empty(), self.table_header.as_deref()) {
+            (true, None) => self.text.clone(),
+            (false, None) => format!("{}{}", context_prefix(&self.headers), self.text),
+            (true, Some(th)) => format!("{th}\n{}", self.text),
+            (false, Some(th)) => format!("{}{th}\n{}", context_prefix(&self.headers), self.text),
         }
     }
 
@@ -111,6 +363,7 @@ impl TextChunk {
         d.set_item("orig_end_byte", self.orig_end_byte)?;
         d.set_item("token_count", self.token_count)?;
         d.set_item("headers", &self.headers)?;
+        d.set_item("table_header", &self.table_header)?;
         Ok(d)
     }
 
@@ -208,40 +461,6 @@ impl TextStreamIter {
 }
 
 /// Token-budgeted chunker for Markdown and plain text.
-///
-/// Args:
-///     max_length: token budget per chunk, header context included (0 = no limit).
-///     overlap: tokens repeated between consecutive chunks when text must be split; must be
-///         smaller than `max_length`.
-///     encoding: `cl100k_base`, `o200k_base`, `p50k_base`, `r50k_base`, `chars` or `words`.
-///         Ignored when `tokenizer_file` is given.
-///     normalize: `"nfc"` (default), `"nfkc"` or `"none"`. Offsets are mapped back to the input.
-///     snap_words: prefer word/sentence boundaries when a hard split is needed.
-///     include_context: `True` (default) parses Markdown: headings become `headers` and a
-///         `[ctx:...] ` prefix that counts against the budget; fenced code blocks and lists
-///         stay intact when they fit (tables, block quotes and HTML blocks get no special
-///         handling). `False` is a flat mode: Markdown is NOT parsed, chunks
-///         are plain token windows (fences/lists/tables can be cut) and `headers` is empty.
-///         `from_file*` gives the same chunks as `chunk()` on the file's text; in this mode
-///         the whole file is read, and files larger than 32 MiB raise `OSError`.
-///     merge_blocks: pack adjacent Markdown blocks into one chunk while they fit.
-///     strict: `True` (default) re-counts every delivered chunk and guarantees
-///         `token_count <= max_length`; a single grapheme that does not fit raises
-///         `ValueError`. `False` skips that check (faster, no guarantee, `token_count` may be
-///         an estimate; an oversized grapheme is returned as its own chunk).
-///     tokenizer_file: path to a Hugging Face `tokenizer.json` (needs a build with the `hf`
-///         feature).
-///     guard_encodings: extra built-in encodings (same names as `encoding`) that every chunk
-///         must also fit. The budget is then enforced on the *largest* count over the primary
-///         tokenizer and all guards, so strict mode guarantees `max_length` for each of them.
-///         Supplying any guards opts into multi-tokenizer mode and its clean-boundary residual fill.
-///     guard_tokenizer_files: extra Hugging Face `tokenizer.json` paths used as guards in the
-///         same way (needs the `hf` feature). Guards cost one tokenizer pass each and chunks are
-///         sized by the tokenizer that yields the most tokens. Special tokens a consumer adds
-///         (e.g. BGE's `[CLS]`/`[SEP]`) are not counted: lower `max_length` by that amount.
-///
-/// All errors are raised as exceptions; no method returns an empty or partial result for
-/// invalid input.
 #[pyclass(module = "text_chipper")]
 pub struct TextChipper {
     cfg: ChunkConfig,
@@ -255,9 +474,6 @@ impl TextChipper {
         path: &str,
         lossy: bool,
     ) -> Result<(Vec<Chunk>, Vec<OrigSpan>), ChipError> {
-        // Collects every chunk of the file. With `include_context` the source is streamed,
-        // otherwise it is read whole (see `FileChunker`). Callers that also need
-        // bounded *output* memory should use `from_file_stream()`.
         let mut stream = FileChunker::open(path, &self.cfg, &self.backend, lossy)?;
         let mut chunks = Vec::new();
         let mut spans = Vec::new();
@@ -282,9 +498,11 @@ impl TextChipper {
         include_context=true,
         merge_blocks=true,
         strict=true,
+        tokenizer=None,
         tokenizer_file=None,
         guard_encodings=None,
-        guard_tokenizer_files=None
+        guard_tokenizer_files=None,
+        guard_tokenizers=None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -297,10 +515,17 @@ impl TextChipper {
         include_context: bool,
         merge_blocks: bool,
         strict: bool,
+        tokenizer: Option<&Bound<'_, PyAny>>,
         tokenizer_file: Option<&str>,
         guard_encodings: Option<Vec<String>>,
         guard_tokenizer_files: Option<Vec<String>>,
+        guard_tokenizers: Option<Vec<Bound<'_, PyAny>>>,
     ) -> PyResult<Self> {
+        if tokenizer.is_some() && tokenizer_file.is_some() {
+            return Err(PyValueError::new_err(
+                "pass at most one of 'tokenizer' or 'tokenizer_file'",
+            ));
+        }
         let cfg = ChunkConfig {
             max_tokens: max_length,
             overlap_tokens: overlap,
@@ -312,12 +537,26 @@ impl TextChipper {
         };
         cfg.validate().map_err(to_pyerr)?;
 
+        let pre_primary = match tokenizer {
+            Some(obj) => Some(resolve_py_tokenizer(obj)?),
+            None => None,
+        };
+        let mut pre_guards = Vec::new();
+        if let Some(objs) = guard_tokenizers.as_ref() {
+            for obj in objs {
+                pre_guards.push(resolve_py_tokenizer(obj)?);
+            }
+        }
+
         // BPE tables take a while to build: do it without holding the GIL.
         let (backend, encoding) = py
             .detach(|| -> Result<(Arc<Backend>, String), ChipError> {
-                let (primary, mut label) = match tokenizer_file {
-                    Some(path) => (Backend::from_tokenizer_file(path)?, format!("hf:{path}")),
-                    None => (Backend::from_name(encoding)?, encoding.to_string()),
+                let (primary, mut label) = match (pre_primary, tokenizer_file) {
+                    (Some(resolved), _) => resolved,
+                    (None, Some(path)) => {
+                        (Backend::from_tokenizer_file(path)?, format!("hf:{path}"))
+                    }
+                    (None, None) => (Backend::from_name(encoding)?, encoding.to_string()),
                 };
                 let mut parts = vec![primary];
                 for name in guard_encodings.as_deref().unwrap_or(&[]) {
@@ -327,6 +566,88 @@ impl TextChipper {
                 for path in guard_tokenizer_files.as_deref().unwrap_or(&[]) {
                     parts.push(Backend::from_tokenizer_file(path)?);
                     label.push_str(&format!("+hf:{path}"));
+                }
+                for (gb, glabel) in pre_guards {
+                    parts.push(gb);
+                    label.push_str(&format!("+{glabel}"));
+                }
+                Ok((Backend::max_of(parts)?, label))
+            })
+            .map_err(to_pyerr)?;
+
+        Ok(TextChipper {
+            cfg,
+            backend,
+            encoding,
+        })
+    }
+
+    /// Construct a `TextChipper` from a Hugging Face model ID (e.g. `"BAAI/bge-large-en-v1.5"`),
+    /// a local directory or `tokenizer.json` file, or a pre-loaded tokenizer object.
+    #[classmethod]
+    #[pyo3(signature = (
+        model_name_or_path,
+        *,
+        max_length=512,
+        overlap=50,
+        normalize="nfc",
+        snap_words=true,
+        include_context=true,
+        merge_blocks=true,
+        strict=true,
+        guard_encodings=None,
+        guard_tokenizer_files=None,
+        guard_tokenizers=None
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn from_pretrained(
+        cls: &Bound<'_, PyType>,
+        model_name_or_path: &Bound<'_, PyAny>,
+        max_length: usize,
+        overlap: usize,
+        normalize: &str,
+        snap_words: bool,
+        include_context: bool,
+        merge_blocks: bool,
+        strict: bool,
+        guard_encodings: Option<Vec<String>>,
+        guard_tokenizer_files: Option<Vec<String>>,
+        guard_tokenizers: Option<Vec<Bound<'_, PyAny>>>,
+    ) -> PyResult<Self> {
+        let py = cls.py();
+        let cfg = ChunkConfig {
+            max_tokens: max_length,
+            overlap_tokens: overlap,
+            normalization: Normalization::parse(normalize).map_err(to_pyerr)?,
+            snap_words,
+            include_context,
+            merge_blocks,
+            strict,
+        };
+        cfg.validate().map_err(to_pyerr)?;
+
+        let (primary, mut label) = resolve_pretrained_backend(py, model_name_or_path)?;
+        let mut pre_guards = Vec::new();
+        if let Some(objs) = guard_tokenizers.as_ref() {
+            for obj in objs {
+                pre_guards.push(resolve_py_tokenizer(obj)?);
+            }
+        }
+
+        let (backend, encoding) = py
+            .detach(|| -> Result<(Arc<Backend>, String), ChipError> {
+                let mut parts = vec![primary];
+                for name in guard_encodings.as_deref().unwrap_or(&[]) {
+                    parts.push(Backend::from_name(name)?);
+                    label.push_str(&format!("+{name}"));
+                }
+                for path in guard_tokenizer_files.as_deref().unwrap_or(&[]) {
+                    parts.push(Backend::from_tokenizer_file(path)?);
+                    label.push_str(&format!("+hf:{path}"));
+                }
+                for (gb, glabel) in pre_guards {
+                    parts.push(gb);
+                    label.push_str(&format!("+{glabel}"));
                 }
                 Ok((Backend::max_of(parts)?, label))
             })
@@ -385,8 +706,6 @@ impl TextChipper {
         let total_bytes: usize = texts.iter().map(String::len).sum();
         let raw: Vec<(Vec<Chunk>, Vec<OrigSpan>)> = py
             .detach(|| {
-                // Rayon scheduling is counterproductive for tiny batches. Use it only once
-                // there are enough independent bytes to amortize the parallel work-stealing cost.
                 if texts.len() < 4 || total_bytes < 64 * 1024 {
                     texts
                         .iter()
@@ -406,7 +725,6 @@ impl TextChipper {
     /// Chunk a UTF-8 text file. `errors="strict"` raises `OSError` on invalid UTF-8;
     /// `errors="replace"` substitutes U+FFFD.
     #[pyo3(signature = (filepath, errors="strict"))]
-    // `from_*` is the public Python API name, so the Rust `from_*`-takes-no-self convention does not apply.
     #[allow(clippy::wrong_self_convention)]
     fn from_file(&self, py: Python<'_>, filepath: &str, errors: &str) -> PyResult<Vec<TextChunk>> {
         let lossy = parse_errors(errors)?;
@@ -419,7 +737,6 @@ impl TextChipper {
     /// Chunk several files in parallel. Returns one list per file, in input order. If any file
     /// fails, the error of the FIRST failing file (in input order) is raised.
     #[pyo3(signature = (filepaths, errors="strict"))]
-    // `from_*` is the public Python API name, so the Rust `from_*`-takes-no-self convention does not apply.
     #[allow(clippy::wrong_self_convention)]
     fn from_files(
         &self,
@@ -441,7 +758,6 @@ impl TextChipper {
     /// accepted for backwards compatibility and ignored. Errors (I/O, invalid UTF-8 with
     /// `errors="strict"`, over-long line) are raised from `__next__`.
     #[pyo3(signature = (filepath, batch_size_lines=1000, errors="strict"))]
-    // `from_*` is the public Python API name, so the Rust `from_*`-takes-no-self convention does not apply.
     #[allow(clippy::wrong_self_convention)]
     fn from_file_stream(
         &self,
@@ -449,7 +765,7 @@ impl TextChipper {
         batch_size_lines: usize,
         errors: &str,
     ) -> PyResult<TextStreamIter> {
-        let _ = batch_size_lines; // accepted for backwards compatibility; has no effect
+        let _ = batch_size_lines;
         let lossy = parse_errors(errors)?;
         let inner =
             FileChunker::open(filepath, &self.cfg, &self.backend, lossy).map_err(to_pyerr)?;

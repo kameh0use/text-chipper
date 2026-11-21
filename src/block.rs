@@ -39,6 +39,16 @@ impl Block {
             crate::markdown::list_parser::parse_list_items(&self.text)
         }
     }
+
+    /// Return the GFM tables structurally recognized inside this block.
+    /// Fenced code blocks are never scanned as Markdown tables.
+    pub fn tables(&self) -> Vec<crate::markdown::table_parser::TableBlock> {
+        if self.is_code {
+            Vec::new()
+        } else {
+            crate::markdown::table_parser::parse_tables(&self.text)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -81,6 +91,7 @@ pub enum BlockKind {
     FencedCode,
     BlockQuote,
     List,
+    Table,
     ThematicBreak,
 }
 
@@ -115,6 +126,9 @@ pub(crate) fn classify_block_start(text: &str, is_code: bool) -> BlockKind {
     }
     if is_list_marker(bytes) {
         return BlockKind::List;
+    }
+    if crate::markdown::table_parser::starts_with_table(text) {
+        return BlockKind::Table;
     }
 
     BlockKind::Paragraph
