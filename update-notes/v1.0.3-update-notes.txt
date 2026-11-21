@@ -1,0 +1,7 @@
+text-chipper 1.0.3 — 2026-11-20
+
+Documentation-only maintenance release:
+- Fix the remaining relative image URLs in README.md so every diagram and benchmark chart renders
+  on PyPI and crates.io.
+
+No runtime behavior or Rust/Python API changes are included.

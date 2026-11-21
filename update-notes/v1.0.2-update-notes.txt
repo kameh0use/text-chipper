@@ -1,0 +1,7 @@
+text-chipper 1.0.2 — 2026-11-20
+
+Documentation-only maintenance release:
+- Convert relative repository file links in README.md to absolute GitHub URLs so links work
+  directly from the PyPI and crates.io package pages.
+
+No runtime behavior or Rust/Python API changes are included.
