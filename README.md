@@ -1,6 +1,6 @@
 # text_chipper
 
-<img align="left" hspace="20" vspace="20" src="https://raw.githubusercontent.com/kameh0use/text-chipper/main/docs/logo.png" width="140" alt="text_chipper logo">
+<img align="left" hspace="20" vspace="20" src="https://raw.githubusercontent.com/devel0mer/text-chipper/main/docs/logo.png" width="140" alt="text_chipper logo">
 
 **High-performance, Markdown- and table-aware, strictly budget-enforced text chunking for RAG and LLM pipelines.
 Built in Rust with zero-dependency Python bindings.**
@@ -73,7 +73,7 @@ chipper = TextChipper.from_pretrained("BAAI/bge-large-en-v1.5", max_length=510, 
 | `chunk.headers` / `chunk.table_header` | List of enclosing section headings (`list[str]`) and repeated table header (`str \| None`) |
 | `chunk.start_byte`, `chunk.end_byte`, `chunk.orig_start_byte`, `chunk.orig_end_byte` | Exact UTF-8 byte offsets (plus `*_index` character offsets) in normalized and original input |
 
-Adapters for LangChain and LlamaIndex are in [`integrations/`](https://github.com/kameh0use/text-chipper/tree/main/integrations).
+Adapters for LangChain and LlamaIndex are in [`integrations/`](https://github.com/devel0mer/text-chipper/tree/main/integrations).
 
 ### Rust
 
@@ -120,13 +120,13 @@ A plain token window cuts wherever the budget ends. On Markdown, that can split 
 
 Same input, same budget (`max_length = 62`, kept small so it fits on a screen):
 
-![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](https://raw.githubusercontent.com/kameh0use/text-chipper/main/docs/before_after.svg)
+![A plain tiktoken window splits a code block inside "timeout=10)", while text-chipper keeps the whole block in one chunk](https://raw.githubusercontent.com/devel0mer/text-chipper/main/docs/before_after.svg)
 
-Reproduce it with [`examples/before_after.py`](https://github.com/kameh0use/text-chipper/blob/main/examples/before_after.py).
+Reproduce it with [`examples/before_after.py`](https://github.com/devel0mer/text-chipper/blob/main/examples/before_after.py).
 
-The same comparison on a real README excerpt: the fixed token window on the left, text-chipper on the right. [`benchmarks/before_after_readme.py`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/before_after_readme.py) runs it on any Markdown file.
+The same comparison on a real README excerpt: the fixed token window on the left, text-chipper on the right. [`benchmarks/before_after_readme.py`](https://github.com/devel0mer/text-chipper/blob/main/benchmarks/before_after_readme.py) runs it on any Markdown file.
 
-![The same README excerpt split two ways: the fixed token window cuts a code comment and an emoji heading; text-chipper keeps both whole](https://raw.githubusercontent.com/kameh0use/text-chipper/main/docs/readme_before_after.svg)
+![The same README excerpt split two ways: the fixed token window cuts a code comment and an emoji heading; text-chipper keeps both whole](https://raw.githubusercontent.com/devel0mer/text-chipper/main/docs/readme_before_after.svg)
 
 ### Table-aware splitting without breaking source offsets
 
@@ -172,13 +172,13 @@ maturin develop --release        # into the active virtualenv
 | chonkie | 11 | ~47 MB | 152 ms | 260 ms |
 | langchain-text-splitters | 33 | ~45 MB | 207 ms | 307 ms |
 
-Measured on macOS arm64 with Python 3.15, one measurement per library, warm start. Installed size is the size of the virtual environment minus an empty one (about ±1 MB). The last column uses the benchmark adapters (`import`, loading `cl100k_base`, chunking a tiny text), so it includes each library's tokenizer; semchunk's own size does not include the tokenizer it needs. How to reproduce: [`benchmarks/README.md`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/README.md#install-footprint).
+Measured on macOS arm64 with Python 3.15, one measurement per library, warm start. Installed size is the size of the virtual environment minus an empty one (about ±1 MB). The last column uses the benchmark adapters (`import`, loading `cl100k_base`, chunking a tiny text), so it includes each library's tokenizer; semchunk's own size does not include the tokenizer it needs. How to reproduce: [`benchmarks/README.md`](https://github.com/devel0mer/text-chipper/blob/main/benchmarks/README.md#install-footprint).
 
 ---
 
 ## 📖 Chunking modes
 
-![Four text-chipper modes compared by how to call them, Markdown handling, memory, speed and use case](https://raw.githubusercontent.com/kameh0use/text-chipper/main/docs/modes.svg)
+![Four text-chipper modes compared by how to call them, Markdown handling, memory, speed and use case](https://raw.githubusercontent.com/devel0mer/text-chipper/main/docs/modes.svg)
 
 ### `include_context=True` (default): Markdown-aware
 
@@ -198,27 +198,27 @@ This is **not** "the same thing without the header prefix". Flat mode does not p
 
 The main benchmark compares `text_chipper` with seven other chunking approaches on 12 workloads: synthetic prose, Markdown and code; real texts such as PubMed, finance, Wikipedia and chat logs; and stress cases. Every library gets a 512-token budget, `cl100k_base` and no overlap. The charts below show the **single-core** lane from the 17 November 2026 run.
 
-The run used a GitHub Actions runner (AMD EPYC 9V45, 4 logical CPUs, 15.6 GB RAM) and Python 3.12.16. Timings are medians of five cold runs in fresh processes. Compared versions: chonkie 1.7.0, langchain-text-splitters 1.1.3, semchunk 4.1.1, semantic-text-splitter 0.33.3 and tiktoken 0.14.0. `text_chipper` is the default Markdown-aware strict mode; `text_chipper (flat)` uses `include_context=False`. Raw results, metric definitions, and harness are in [`benchmarks/`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/) and [`benchmarks/results/20261117_133546/`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/results/20261117_133546/).
+The run used a GitHub Actions runner (AMD EPYC 9V45, 4 logical CPUs, 15.6 GB RAM) and Python 3.12.16. Timings are medians of five cold runs in fresh processes. Compared versions: chonkie 1.7.0, langchain-text-splitters 1.1.3, semchunk 4.1.1, semantic-text-splitter 0.33.3 and tiktoken 0.14.0. `text_chipper` is the default Markdown-aware strict mode; `text_chipper (flat)` uses `include_context=False`. Raw results, metric definitions, and harness are in [`benchmarks/`](https://github.com/devel0mer/text-chipper/blob/main/benchmarks/) and [`benchmarks/results/20261117_133546/`](https://github.com/devel0mer/text-chipper/blob/main/benchmarks/results/20261117_133546/).
 
 ### Speed
 
 Throughput averaged geometrically over the 12 workloads: `text_chipper` reaches **37.1 MiB/s** in the single-core lane. That is 2.4 times the throughput of a plain tiktoken window (15.5 MiB/s), and 3.9 to 11.6 times the throughput of the other chunking libraries.
 
-![Bar chart: geometric-mean throughput of each library over all 12 workloads](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/speed_overall_latest.png)
+![Bar chart: geometric-mean throughput of each library over all 12 workloads](https://raw.githubusercontent.com/devel0mer/text-chipper/main/benchmarks/charts/speed_overall_latest.png)
 
 `text_chipper` is the fastest approach on 10 of 12 workloads. The exceptions are `stress_cjk_unbroken`, where the tiktoken window reaches 19.7 MiB/s against `text_chipper`'s 16.0 MiB/s, and `real_chatlogs`, where `text_chipper` flat mode reaches 18.4 MiB/s against 16.1 MiB/s in the default mode.
 
-![Heat map: MiB/s of each library on each workload](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/speed_per_every_workload.png)
+![Heat map: MiB/s of each library on each workload](https://raw.githubusercontent.com/devel0mer/text-chipper/main/benchmarks/charts/speed_per_every_workload.png)
 
 ### Memory
 
 Peak memory of the whole Python process (including the interpreter and imported library), single core, averaged over the workloads. Mean process peaks range from 94 to 102 MB; the largest single-workload peak was 119 MB. `text_chipper` adds 1.7 MB on average while chunking; its largest measured increase is about 11.7 MB.
 
-![Bar chart: peak memory of the Python process per library, single core](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/memory_single_core.png)
+![Bar chart: peak memory of the Python process per library, single core](https://raw.githubusercontent.com/devel0mer/text-chipper/main/benchmarks/charts/memory_single_core.png)
 
 ### Chunk quality
 
-![Scorecard: token limit, words, source text and code fences per library, with speed](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/quality_scorecard.png)
+![Scorecard: token limit, words, source text and code fences per library, with speed](https://raw.githubusercontent.com/devel0mer/text-chipper/main/benchmarks/charts/quality_scorecard.png)
 
 - **Token limit**: no `text_chipper` chunk exceeded 512 tokens on any workload. Across all workloads, LangChain had 15 over-limit chunks; the tiktoken window and chonkie TokenChunker had 18 each. Their largest overshoot was two tokens for LangChain (514); the other two reached 513. Counts were checked independently with `cl100k_base` on delivered chunk text.
 - **Words and code**: token windows cut words at up to 35.5 % of cut points and broke about 23 % of the measured small fences. Chonkie's RecursiveChunker broke about 22 %. `text_chipper` kept all 392 measured fences in `markdown_doc` and all 3,434 in `code_heavy` intact. Its only workload with a measured mid-word cut was `stress_giant_list` (under 0.1 % of cut points).
@@ -233,9 +233,9 @@ python benchmarks/make_charts.py benchmarks/results/20261117_133546/results.json
 
 ### Large files and streaming
 
-For a larger input, we chunked a 514.3 MiB WikiText-103 file with 512-token chunks, `cl100k_base` and no overlap on a GitHub Actions runner (4 logical CPUs, Python 3.12, single-core lane). Raw results are in [`benchmarks/results/streaming_20261117/`](https://github.com/kameh0use/text-chipper/blob/main/benchmarks/results/streaming_20261117/).
+For a larger input, we chunked a 514.3 MiB WikiText-103 file with 512-token chunks, `cl100k_base` and no overlap on a GitHub Actions runner (4 logical CPUs, Python 3.12, single-core lane). Raw results are in [`benchmarks/results/streaming_20261117/`](https://github.com/devel0mer/text-chipper/blob/main/benchmarks/results/streaming_20261117/).
 
-![Bar chart: throughput of each library on a 514 MiB file, single-core lane](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/streaming_speed_single.png)
+![Bar chart: throughput of each library on a 514 MiB file, single-core lane](https://raw.githubusercontent.com/devel0mer/text-chipper/main/benchmarks/charts/streaming_speed_single.png)
 
 | Library | File given as | Time | MiB/s | Memory growth | Chunks over 512 tokens |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -248,7 +248,7 @@ For a larger input, we chunked a 514.3 MiB WikiText-103 file with 512-token chun
 | semchunk | 8 MiB blocks | 111 s | 4.6 | 3.3 GB | 0 |
 | semantic-text-splitter | 8 MiB blocks | 152 s | 3.4 | 87 MB | 0 |
 
-![Bar chart: memory growth of each library on a 514 MiB file, single-core lane](https://raw.githubusercontent.com/kameh0use/text-chipper/main/benchmarks/charts/streaming_memory_single.png)
+![Bar chart: memory growth of each library on a 514 MiB file, single-core lane](https://raw.githubusercontent.com/devel0mer/text-chipper/main/benchmarks/charts/streaming_memory_single.png)
 
 - **Memory stays bounded while streaming.** The process grew by 56 MB on the 514 MiB file. Reading it into one string and calling `chunk()` grew by 4.6 GB. Verification hashes for `from_file_stream` and whole-file `chunk()` match.
 - **Speed.** Streaming reached 20.5 MiB/s, 1.6 to 6.0 times the other libraries fed in blocks.
@@ -365,7 +365,7 @@ chipper = TextChipper(
 )
 ```
 
-See the [tokenizer guard guide](https://github.com/kameh0use/text-chipper/blob/main/tokenizer-guard/README.md) for supported options, overhead handling, and the acceptance benchmark.
+See the [tokenizer guard guide](https://github.com/devel0mer/text-chipper/blob/main/tokenizer-guard/README.md) for supported options, overhead handling, and the acceptance benchmark.
 
 ---
 

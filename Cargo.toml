@@ -8,8 +8,8 @@ readme = "README.md"
 keywords = ["chunking", "tokenizer", "markdown", "rag", "nlp"]
 categories = ["text-processing"]
 license = "Apache-2.0"
-repository = "https://github.com/kameh0use/text-chipper"
-homepage = "https://github.com/kameh0use/text-chipper"
+repository = "https://github.com/devel0mer/text-chipper"
+homepage = "https://github.com/devel0mer/text-chipper"
 documentation = "https://docs.rs/text_chipper"
 # Keep the crates.io package small (benchmark results, plots and scripts stay out of it).
 include = ["/src/**", "/benches/**", "/tests/fixtures/**", "/tokenizer-guard/README.md", "/Cargo.toml", "/README.md", "/LICENSE", "!.DS_Store"]
